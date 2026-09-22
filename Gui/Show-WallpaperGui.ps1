@@ -91,8 +91,18 @@ $script:State = @{
 
 $script:SettingsPath = Join-Path (Split-Path (Get-WallpaperLogPath) -Parent) 'gui-settings.json'
 
+function Get-DefaultRoot {
+    # The three sample backgrounds that ship with the repository, so a fresh
+    # clone opens on something real instead of an empty folder.
+    $examples = Join-Path (Split-Path $PSScriptRoot -Parent) 'examples\wallpapers'
+    if (Test-Path -LiteralPath $examples -PathType Container) {
+        return (Get-Item -LiteralPath $examples).FullName
+    }
+    return (Join-Path $env:USERPROFILE 'Pictures\Wallpapers')
+}
+
 function Import-GuiSetting {
-    $root     = Join-Path $env:USERPROFILE 'Pictures\Wallpapers'
+    $root     = Get-DefaultRoot
     $position = 'Fill'
 
     if (Test-Path -LiteralPath $script:SettingsPath -PathType Leaf) {
@@ -188,10 +198,12 @@ function Set-DarkTheme {
     if ($isLight) { return }
 
     $dark = @(
-        @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',  '#FF24272B'),
-        @('BorderBrush2',  '#FF3A3F45'), @('TextBrush',     '#FFECEEF0'),
-        @('SubtleBrush',   '#FFA8AFB7'), @('AccentBrush',   '#FFE2ABBA'),
-        @('OnAccentBrush', '#FF1B1D20'), @('ThumbBrush',    '#FF2E3236')
+        @('WindowBrush',      '#FF1B1D20'), @('SurfaceBrush',  '#FF24272B'),
+        @('FieldBrush',       '#FF1F2226'), @('BorderBrush2',  '#FF3A3F45'),
+        @('TextBrush',        '#FFECEEF0'), @('SubtleBrush',   '#FFA8AFB7'),
+        @('AccentBrush',      '#FFE2ABBA'), @('OnAccentBrush', '#FF1B1D20'),
+        @('ThumbBrush',       '#FF2E3236'), @('HoverBrush',    '#FF2E3236'),
+        @('PressedBrush',     '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057')
     )
     foreach ($pair in $dark) {
         $color = [System.Windows.Media.ColorConverter]::ConvertFromString($pair[1])
