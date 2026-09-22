@@ -52,6 +52,18 @@ Reduced ratios for common panels:
 | 3440x1440  | `ratio-43x18` |
 | 5120x2160  | `ratio-64x27` |
 
+## The graphical manager
+
+Double-click `WallpaperGui.cmd`, or run:
+
+```powershell
+.\Set-WallpaperByResolution.ps1 -Gui
+```
+
+One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single checkbox. It follows the Windows light/dark setting and refreshes itself when you dock or undock.
+
+The timing knobs (`-PollSeconds`, `-SettleDelay`) are deliberately not in the window; they stay on the command line.
+
 ## Usage
 
 Test first. This prints what is detected and applies once:

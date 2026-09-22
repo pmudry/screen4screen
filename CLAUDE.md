@@ -16,6 +16,9 @@ Layout:
 - `Set-WallpaperByResolution.ps1` - thin CLI wrapper at the repo root. Its
   parameter block and comment-based help are the documented surface; keep
   them in step with README.md.
+- `Gui/` - the WPF manager: `Show-WallpaperGui.ps1` (ASCII host) plus
+  `MainWindow.xaml` (UTF-8, holds every user-facing string).
+- `WallpaperGui.cmd` - double-clickable launcher, passes `-ExecutionPolicy Bypass`.
 - `examples/wallpapers/` - three ISC sample backgrounds, named for the lookup.
 
 ## Design decisions, do not undo without a reason
@@ -66,6 +69,27 @@ Layout:
   returned as `IDesktopWallpaper` arrives back in PowerShell as
   `System.__ComObject` with no methods, the interface being IUnknown-only with
   no IDispatch. Add new COM calls to that class, not to the script body.
+
+## GUI notes
+
+- **Assigning a brush into `Window.Resources` needs an explicit cast.** The
+  `ResourceDictionary` indexer takes an `object`, so nothing forces PowerShell
+  to unwrap its `PSObject`; WPF then stores the wrapper and falls back to its
+  `ToString`, failing with "'#FF1B1D20' is not a valid value for property
+  'Background'". Cast to `[System.Windows.Media.Brush]` on the way in.
+- **A `DispatcherTimer` on the UI thread, never a background runspace.** The
+  work is a few `EnumDisplayDevices` calls and two COM calls; a worker runspace
+  would be MTA and every `IDesktopWallpaper` call would cross an apartment
+  boundary. The only slow thing in the watch loop is `Start-Sleep`, which is
+  exactly what a timer replaces.
+- **Thumbnails are decoded from a stream we dispose**, with `CacheOption =
+  OnLoad` set before `EndInit` and `DecodePixelWidth` capped. A `BitmapImage`
+  with a `UriSource` holds the file open and caches on the URI, so a replaced
+  image would keep showing old pixels. `.webp` has no WIC decoder on a stock
+  Windows, so every thumbnail load is wrapped and degrades to a blank tile;
+  applying a `.webp` wallpaper is unaffected, that path is Windows' own.
+- The window never re-applies on a topology change. That is the background
+  task's job, and doing both would double-apply and flash.
 
 ## Conventions
 

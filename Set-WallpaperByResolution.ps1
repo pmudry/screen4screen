@@ -43,6 +43,9 @@
 .PARAMETER Position
     Global fit mode: Center, Tile, Stretch, Fit, Fill, Span. Default: Fill.
 
+.PARAMETER Gui
+    Opens the graphical manager instead of applying anything.
+
 .PARAMETER Once
     Apply once and exit. Handy for testing.
 
@@ -81,6 +84,7 @@ param(
     [ValidateSet('Center', 'Tile', 'Stretch', 'Fit', 'Fill', 'Span')]
     [string] $Position = 'Fill',
 
+    [switch] $Gui,
     [switch] $Once,
     [switch] $Install,
     [switch] $Uninstall,
@@ -108,6 +112,11 @@ else {
 #------------------------------------------------------------------------------
 # Entry point
 #------------------------------------------------------------------------------
+
+if ($Gui) {
+    & (Join-Path $PSScriptRoot 'Gui\Show-WallpaperGui.ps1')
+    return
+}
 
 if ($Uninstall) {
     Uninstall-WallpaperTask -Verbose

@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="Fonds d'écran par écran"
+        Width="820" Height="640" MinWidth="680" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" FontSize="13"
+        Background="{DynamicResource WindowBrush}">
+
+  <Window.Resources>
+
+    <!-- Every user-facing string lives here. The .ps1 host is ASCII only,
+         so it fetches these by key rather than embedding accented text. -->
+    <sys:String x:Key="S_Ready">Prêt.</sys:String>
+    <sys:String x:Key="S_Applying">Application en cours...</sys:String>
+    <sys:String x:Key="S_Applied">{0} écran(s) mis à jour.</sys:String>
+    <sys:String x:Key="S_AppliedPartial">{0} écran(s) sur {1} mis à jour. Détails dans le journal.</sys:String>
+    <sys:String x:Key="S_Saved">Réglages enregistrés.</sys:String>
+    <sys:String x:Key="S_TopologyChanged">Vos écrans ont changé, la liste est à jour.</sys:String>
+    <sys:String x:Key="S_TopologyChangedIdle">Vos écrans ont changé. Cliquez « Appliquer maintenant ».</sys:String>
+    <sys:String x:Key="S_FolderMissing">Ce dossier n'existe pas.</sys:String>
+    <sys:String x:Key="S_NoDisplay">Aucun écran détecté. Essayez « Actualiser ».</sys:String>
+    <sys:String x:Key="S_AutoOn">Actif : vos fonds d'écran suivront vos écrans.</sys:String>
+    <sys:String x:Key="S_AutoOff">Inactif : les fonds d'écran ne changeront plus tout seuls.</sys:String>
+    <sys:String x:Key="S_AutoPaused">En pause : ça reprendra à votre prochaine ouverture de session.</sys:String>
+    <sys:String x:Key="S_AutoFailed">Impossible de changer ce réglage. Détails dans le journal.</sys:String>
+    <sys:String x:Key="S_Error">Une erreur est survenue. Détails dans le journal.</sys:String>
+    <sys:String x:Key="S_PickTitle">Choisissez une image pour cet écran</sys:String>
+    <sys:String x:Key="S_BrowseTitle">Choisissez le dossier qui contient vos images.</sys:String>
+    <sys:String x:Key="S_SourceAuto">(choisie automatiquement)</sys:String>
+    <sys:String x:Key="S_SourceManual">(votre choix)</sys:String>
+    <sys:String x:Key="S_NoImage">Aucune image ne correspond à cet écran.</sys:String>
+    <sys:String x:Key="S_NoThumb">Aperçu impossible pour ce format d'image.</sys:String>
+    <sys:String x:Key="S_NotMatched">Windows ne distingue pas cet écran ; l'image sera appliquée partout.</sys:String>
+    <sys:String x:Key="S_PickLabel">Choisir une image...</sys:String>
+    <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
+
+
+    <!-- Swapped at startup when Windows is in dark mode. Always
+         DynamicResource at the point of use, so the swap propagates. -->
+    <SolidColorBrush x:Key="WindowBrush"    Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SurfaceBrush"   Color="#F5F6F7"/>
+    <SolidColorBrush x:Key="BorderBrush2"   Color="#D9DCE0"/>
+    <SolidColorBrush x:Key="TextBrush"      Color="#1A1C1E"/>
+    <SolidColorBrush x:Key="SubtleBrush"    Color="#5A6068"/>
+    <SolidColorBrush x:Key="AccentBrush"    Color="#B0296A"/>
+    <SolidColorBrush x:Key="OnAccentBrush"  Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ThumbBrush"     Color="#E8EAEC"/>
+
+    <Style TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    </Style>
+
+    <Style x:Key="Subtle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleBrush}"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- The stock templates ignore the theme brushes and would leave white
+         boxes in a dark window. -->
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush2}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
+    </Style>
+
+    <Style TargetType="ComboBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush2}"/>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="Padding" Value="6,4"/>
+    </Style>
+
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    </Style>
+
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush2}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="18,8"/>
+    </Style>
+
+    <!-- One card per monitor. Row buttons carry their verb in Tag and are
+         handled by a single class handler on the ItemsControl. -->
+    <DataTemplate x:Key="DisplayTemplate">
+      <Border Margin="0,0,0,8" Padding="12" CornerRadius="4"
+              Background="{DynamicResource SurfaceBrush}"
+              BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+
+          <Border Grid.Column="0" Width="128" Height="54" CornerRadius="3"
+                  Background="{DynamicResource ThumbBrush}" ClipToBounds="True">
+            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+          </Border>
+
+          <StackPanel Grid.Column="1" Margin="14,0,0,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Friendly}" FontWeight="SemiBold" FontSize="14"
+                         TextTrimming="CharacterEllipsis"/>
+              <Border Background="{DynamicResource AccentBrush}" CornerRadius="3"
+                      Padding="6,1" Margin="10,0,0,0"
+                      Visibility="{Binding BadgeVisibility}">
+                <TextBlock Text="Écran principal" FontSize="11"
+                           Foreground="{DynamicResource OnAccentBrush}"/>
+              </Border>
+            </StackPanel>
+
+            <TextBlock Text="{Binding ResolutionText}" Style="{StaticResource Subtle}"
+                       Margin="0,2,0,0"/>
+
+            <TextBlock Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding ImagePath}">
+              <Run Text="{Binding ImageText, Mode=OneWay}"/>
+              <Run Text="{Binding SourceText, Mode=OneWay}"
+                   Foreground="{DynamicResource SubtleBrush}"/>
+            </TextBlock>
+
+            <TextBlock Text="{Binding ProblemText}" Margin="0,4,0,0"
+                       Foreground="{DynamicResource AccentBrush}" FontSize="12"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding ProblemVisibility}"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <Button Tag="pick" Content="{Binding PickLabel}"/>
+              <Button Tag="auto" Content="Revenir à l'automatique" Margin="8,0,0,0"
+                      Visibility="{Binding AutoVisibility}"/>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>   <!-- petal strip -->
+      <RowDefinition Height="Auto"/>   <!-- header -->
+      <RowDefinition Height="Auto"/>   <!-- settings -->
+      <RowDefinition Height="*"/>      <!-- monitors -->
+      <RowDefinition Height="Auto"/>   <!-- automation -->
+      <RowDefinition Height="Auto"/>   <!-- bottom bar -->
+    </Grid.RowDefinitions>
+
+    <Rectangle Grid.Row="0" Height="3">
+      <Rectangle.Fill>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+          <GradientStop Color="#98C7BF" Offset="0.0"/>
+          <GradientStop Color="#E2ABBA" Offset="0.25"/>
+          <GradientStop Color="#A890C0" Offset="0.50"/>
+          <GradientStop Color="#8CC6E6" Offset="0.75"/>
+          <GradientStop Color="#F7F19F" Offset="1.0"/>
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+    </Rectangle>
+
+    <StackPanel Grid.Row="1" Margin="20,16,20,0">
+      <TextBlock Text="Fonds d'écran par écran" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."
+                 Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
+    </StackPanel>
+
+    <Grid Grid.Row="2" Margin="20,18,20,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="Dossier des images"
+                 VerticalAlignment="Center" Margin="0,0,12,0"/>
+      <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtRoot" Padding="6,5"
+                 VerticalContentAlignment="Center"/>
+      <Button    Grid.Row="0" Grid.Column="2" x:Name="BtnBrowse" Content="Parcourir..."
+                 Margin="8,0,0,0"/>
+
+      <TextBlock Grid.Row="1" Grid.Column="0" Text="Affichage de l'image"
+                 VerticalAlignment="Center" Margin="0,10,12,0"/>
+      <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="CmbPosition" Margin="0,10,0,0"
+                 Padding="6,5" HorizontalAlignment="Left" MinWidth="280">
+        <ComboBoxItem Tag="Fill"    Content="Rempli (recadré si besoin)"/>
+        <ComboBoxItem Tag="Fit"     Content="Entier (bandes sur les côtés)"/>
+        <ComboBoxItem Tag="Stretch" Content="Déformé pour remplir"/>
+        <ComboBoxItem Tag="Center"  Content="Centré, taille réelle"/>
+        <ComboBoxItem Tag="Tile"    Content="Répété en mosaïque"/>
+        <ComboBoxItem Tag="Span"    Content="Une seule image sur tous les écrans"/>
+      </ComboBox>
+    </Grid>
+
+    <Grid Grid.Row="3" Margin="20,18,20,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <DockPanel Grid.Row="0" Margin="0,0,0,8">
+        <Button DockPanel.Dock="Right" x:Name="BtnRefresh" Content="Actualiser"/>
+        <TextBlock Text="Vos écrans" Style="{StaticResource SectionTitle}"
+                   VerticalAlignment="Center"/>
+      </DockPanel>
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl x:Name="LstDisplays"
+                      ItemTemplate="{StaticResource DisplayTemplate}"/>
+      </ScrollViewer>
+    </Grid>
+
+    <Border Grid.Row="4" Margin="20,16,20,0" Padding="14,12" CornerRadius="4"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
+      <StackPanel>
+        <CheckBox x:Name="TglAuto" FontWeight="SemiBold"
+                  Foreground="{DynamicResource TextBrush}"
+                  Content="Changer les fonds d'écran automatiquement"
+                  ToolTip="Quand c'est actif, les fonds d'écran se remettent en place tout seuls dès que vous branchez, débranchez ou changez d'écran, y compris après un redémarrage."/>
+        <TextBlock x:Name="TxtAutoState" Style="{StaticResource Subtle}"
+                   Margin="24,4,0,0" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+
+    <DockPanel Grid.Row="5" Margin="20,16,20,18">
+      <Button DockPanel.Dock="Right" x:Name="BtnApply" Content="Appliquer maintenant"
+              Style="{StaticResource AccentButton}" IsDefault="True"/>
+      <Button DockPanel.Dock="Right" x:Name="BtnLog" Content="Voir le journal"
+              Margin="0,0,10,0"
+              ToolTip="Ouvre le fichier texte où l'outil note ce qu'il fait."/>
+      <TextBlock x:Name="TxtStatus" VerticalAlignment="Center"
+                 Style="{StaticResource Subtle}" TextTrimming="CharacterEllipsis"/>
+    </DockPanel>
+
+  </Grid>
+</Window>

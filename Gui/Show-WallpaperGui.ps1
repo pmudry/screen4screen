@@ -1,0 +1,567 @@
+<#
+.SYNOPSIS
+    Graphical manager for WallpaperByResolution.
+
+.DESCRIPTION
+    A single window to pick the image folder, see what each monitor will get,
+    pin an image to a monitor, and turn the automatic behaviour on or off.
+
+    ASCII only in this file. Every user-facing string lives in MainWindow.xaml,
+    which is UTF-8 and declares its own encoding, so the French text is safe
+    there and this host stays readable under Windows PowerShell 5.1.
+
+.NOTES
+    Machine policy may be AllSigned, so launch through:
+      powershell -ExecutionPolicy Bypass -File .\Gui\Show-WallpaperGui.ps1
+#>
+
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+Add-Type -AssemblyName System.Windows.Forms
+
+# WPF needs a single-threaded apartment. Both shipped hosts are STA by
+# default, but pwsh -MTA exists and would fail later with an opaque
+# COMException instead of a sentence.
+if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
+    throw 'This window needs an STA host. Start it with: powershell -STA -File ...'
+}
+
+$moduleManifest = Join-Path (Split-Path $PSScriptRoot -Parent) `
+                            'WallpaperByResolution\WallpaperByResolution.psd1'
+Import-Module $moduleManifest -Force -ErrorAction Stop -Verbose:$false
+
+
+#------------------------------------------------------------------------------
+# Row type bound to the monitor list
+#------------------------------------------------------------------------------
+
+# A plain CLR type rather than a pscustomobject: WPF binds to PSObject only
+# through its type descriptor, and that path behaves differently between
+# 5.1 and 7. Thumbnail stays 'object' so this type needs no WPF reference.
+if (-not ('WallByResGui.DisplayRow' -as [type])) {
+    Add-Type -Language CSharp -TypeDefinition @'
+namespace WallByResGui
+{
+    public class DisplayRow
+    {
+        public string Friendly           { get; set; }
+        public string DevicePath         { get; set; }
+        public string ResolutionText     { get; set; }
+        public string ImageText          { get; set; }
+        public string ImagePath          { get; set; }
+        public string SourceText         { get; set; }
+        public string ProblemText        { get; set; }
+        public string PickLabel          { get; set; }
+        public string BadgeVisibility    { get; set; }
+        public string ProblemVisibility  { get; set; }
+        public string AutoVisibility     { get; set; }
+        public object Thumbnail          { get; set; }
+    }
+}
+'@
+}
+
+
+#------------------------------------------------------------------------------
+# State
+#------------------------------------------------------------------------------
+
+# One hashtable, deliberately: handler script blocks resolve variables against
+# the script scope when they run, not over a closure, and a missing hashtable
+# key returns $null quietly where a missing variable would throw under
+# Set-StrictMode -Version Latest.
+$script:State = @{
+    Root         = $null
+    Position     = 'Fill'
+    Signature    = $null
+    Pending      = $null
+    StableTicks  = 0
+    TaskChecked  = 0
+    Thumbs       = @{}
+    Rows         = $null
+    Loaded       = $false
+}
+
+$script:SettingsPath = Join-Path (Split-Path (Get-WallpaperLogPath) -Parent) 'gui-settings.json'
+
+function Import-GuiSetting {
+    $root     = Join-Path $env:USERPROFILE 'Pictures\Wallpapers'
+    $position = 'Fill'
+
+    if (Test-Path -LiteralPath $script:SettingsPath -PathType Leaf) {
+        try {
+            $d = Get-Content -LiteralPath $script:SettingsPath -Raw | ConvertFrom-Json
+            $names = $d.PSObject.Properties.Name
+            if ($names -contains 'root'     -and $d.root)     { $root     = $d.root }
+            if ($names -contains 'position' -and $d.position) { $position = $d.position }
+        }
+        catch { }   # a hand-mangled file must not stop the window opening
+    }
+
+    $script:State.Root     = $root
+    $script:State.Position = $position
+}
+
+function Export-GuiSetting {
+    try {
+        $dir = Split-Path $script:SettingsPath -Parent
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $json = [pscustomobject]@{
+            root     = $script:State.Root
+            position = $script:State.Position
+        } | ConvertTo-Json
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($script:SettingsPath, $json, $utf8)
+    }
+    catch { }
+}
+
+
+#------------------------------------------------------------------------------
+# Window
+#------------------------------------------------------------------------------
+
+$xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
+
+# XmlReader.Create on the path, not [xml](Get-Content): Get-Content guesses the
+# encoding and would mangle the accented strings under 5.1.
+$reader = [System.Xml.XmlReader]::Create($xamlPath)
+try   { $window = [System.Windows.Markup.XamlReader]::Load($reader) }
+finally { $reader.Dispose() }
+
+$ui = @{}
+foreach ($name in @('TxtRoot', 'BtnBrowse', 'CmbPosition', 'LstDisplays', 'BtnRefresh',
+                    'TglAuto', 'TxtAutoState', 'TxtStatus', 'BtnLog', 'BtnApply')) {
+    $control = $window.FindName($name)
+    if ($null -eq $control) { throw ("MainWindow.xaml has no control named '{0}'." -f $name) }
+    $ui[$name] = $control
+}
+$script:Ui = $ui
+
+function Get-Text {
+    param([string] $Key)
+    return [string] $window.FindResource($Key)
+}
+
+function Set-Status {
+    param([string] $Key, [object[]] $Arg)
+    $text = Get-Text $Key
+    if ($Arg) { $text = [string]::Format($text, $Arg) }
+    $script:Ui.TxtStatus.Text = $text
+}
+
+function Invoke-Guarded {
+    # No Application object means no DispatcherUnhandledException hook, so an
+    # exception escaping a handler would kill the window with no message.
+    param([scriptblock] $Body)
+    try { & $Body }
+    catch {
+        try { $script:Ui.TxtStatus.Text = Get-Text 'S_Error' } catch { }
+        Write-Warning ("GUI: {0}" -f $_.Exception.Message)
+    }
+}
+
+
+#------------------------------------------------------------------------------
+# Theme
+#------------------------------------------------------------------------------
+
+function Set-DarkTheme {
+    $isLight = $true
+    try {
+        $key = Get-ItemProperty -ErrorAction Stop `
+               -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' `
+               -Name 'AppsUseLightTheme'
+        $isLight = ([int] $key.AppsUseLightTheme) -ne 0
+    }
+    catch { }   # key absent on older builds: stay light
+
+    if ($isLight) { return }
+
+    $dark = @(
+        @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',  '#FF24272B'),
+        @('BorderBrush2',  '#FF3A3F45'), @('TextBrush',     '#FFECEEF0'),
+        @('SubtleBrush',   '#FFA8AFB7'), @('AccentBrush',   '#FFE2ABBA'),
+        @('OnAccentBrush', '#FF1B1D20'), @('ThumbBrush',    '#FF2E3236')
+    )
+    foreach ($pair in $dark) {
+        $color = [System.Windows.Media.ColorConverter]::ConvertFromString($pair[1])
+        $brush = New-Object System.Windows.Media.SolidColorBrush $color
+        $brush.Freeze()
+        # Cast, or PowerShell stores its PSObject wrapper in the dictionary
+        # (the indexer takes an object, so nothing forces an unwrap) and WPF
+        # then tries to use the brush's ToString as the property value.
+        $window.Resources[$pair[0]] = [System.Windows.Media.Brush] $brush
+    }
+}
+
+
+#------------------------------------------------------------------------------
+# Thumbnails
+#------------------------------------------------------------------------------
+
+function New-Thumbnail {
+    param([string] $Path)
+
+    if (-not $Path) { return $null }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+
+    $info = Get-Item -LiteralPath $Path
+    $key  = '{0}|{1}|{2}' -f $info.FullName, $info.LastWriteTimeUtc.Ticks, $info.Length
+    if ($script:State.Thumbs.ContainsKey($key)) { return $script:State.Thumbs[$key] }
+
+    $image = $null
+    try {
+        # Loaded through a stream we dispose ourselves: BitmapImage with a
+        # UriSource keeps the file open and caches on the URI, so a replaced
+        # image would keep showing the old pixels.
+        $stream = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+        try {
+            $image = New-Object System.Windows.Media.Imaging.BitmapImage
+            $image.BeginInit()
+            # OnLoad before EndInit is the load-bearing line: it decodes fully
+            # during EndInit so the stream can be closed immediately.
+            $image.CacheOption      = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+            $image.DecodePixelWidth = 256
+            $image.StreamSource     = $stream
+            $image.EndInit()
+            $image.Freeze()
+        }
+        finally { $stream.Dispose() }
+    }
+    catch {
+        # No WIC codec for this format (webp on a stock Windows, typically).
+        $image = $null
+    }
+
+    $script:State.Thumbs[$key] = $image
+    return $image
+}
+
+
+#------------------------------------------------------------------------------
+# Monitor list
+#------------------------------------------------------------------------------
+
+function Update-DisplayList {
+    $root = $script:State.Root
+    $rows = New-Object System.Collections.ObjectModel.ObservableCollection[object]
+
+    $plan = @()
+    if ($root -and (Test-Path -LiteralPath $root -PathType Container)) {
+        $plan = @(Get-WallpaperPlan -Root $root)
+    }
+    else {
+        $plan = @(Get-AttachedDisplay | ForEach-Object {
+            [pscustomobject]@{
+                Friendly = $_.Friendly; DevicePath = $_.DevicePath
+                Width = $_.Width; Height = $_.Height; IsPrimary = $_.IsPrimary
+                Image = $null; Source = 'None'; Matched = $false
+            }
+        })
+    }
+
+    foreach ($p in $plan) {
+        $row = New-Object WallByResGui.DisplayRow
+        $row.Friendly         = $p.Friendly
+        $row.DevicePath       = $p.DevicePath
+        $row.ResolutionText   = '{0} x {1}' -f $p.Width, $p.Height
+        $row.BadgeVisibility  = if ($p.IsPrimary) { 'Visible' } else { 'Collapsed' }
+        $row.ImagePath        = $p.Image
+        $row.ProblemText      = ''
+        $row.ProblemVisibility = 'Collapsed'
+
+        $isManual = ($p.Source -eq 'Assignment')
+        $row.AutoVisibility = if ($isManual) { 'Visible' } else { 'Collapsed' }
+        $row.PickLabel      = if ($isManual) { Get-Text 'S_ChangeLabel' } else { Get-Text 'S_PickLabel' }
+
+        if ($p.Image) {
+            $row.ImageText  = (Split-Path $p.Image -Leaf) + '  '
+            $row.SourceText = if ($isManual) { Get-Text 'S_SourceManual' } else { Get-Text 'S_SourceAuto' }
+            $row.Thumbnail  = New-Thumbnail -Path $p.Image
+            if ($null -eq $row.Thumbnail) {
+                $row.ProblemText       = Get-Text 'S_NoThumb'
+                $row.ProblemVisibility = 'Visible'
+            }
+        }
+        else {
+            $row.ImageText         = ''
+            $row.SourceText        = ''
+            $row.ProblemText       = Get-Text 'S_NoImage'
+            $row.ProblemVisibility = 'Visible'
+        }
+
+        if (-not $p.Matched -and $plan.Count -gt 1) {
+            $row.ProblemText       = Get-Text 'S_NotMatched'
+            $row.ProblemVisibility = 'Visible'
+        }
+
+        $rows.Add($row)
+    }
+
+    $script:State.Rows = $rows
+    $script:Ui.LstDisplays.ItemsSource = $rows
+
+    if ($rows.Count -eq 0) { $script:Ui.TxtStatus.Text = Get-Text 'S_NoDisplay' }
+}
+
+
+#------------------------------------------------------------------------------
+# Scheduled task
+#------------------------------------------------------------------------------
+
+function Update-AutoState {
+    $state = Get-WallpaperTaskState
+    $script:Ui.TglAuto.IsChecked = $state.Installed
+
+    if (-not $state.Installed)  { $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoOff';    return }
+    if ($state.Running)         { $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoOn';     return }
+    $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoPaused'
+}
+
+function Set-AutoMode {
+    param([bool] $Enabled)
+
+    $launcher = Join-Path (Split-Path $PSScriptRoot -Parent) 'Set-WallpaperByResolution.ps1'
+
+    if ($Enabled) {
+        Install-WallpaperTask -Root $script:State.Root `
+                              -PositionName $script:State.Position `
+                              -LauncherPath $launcher
+        try { Start-ScheduledTask -TaskName 'WallpaperByResolution' -ErrorAction Stop } catch { }
+    }
+    else {
+        Uninstall-WallpaperTask
+    }
+
+    Update-AutoState
+}
+
+function Sync-AutoTask {
+    # The task bakes the folder and the fit mode into its command line, so a
+    # settings change has to be pushed into it or the background pass would
+    # keep using the old values.
+    if ((Get-WallpaperTaskState).Installed) {
+        Invoke-Guarded { Set-AutoMode -Enabled $true }
+    }
+}
+
+
+#------------------------------------------------------------------------------
+# Actions
+#------------------------------------------------------------------------------
+
+function Invoke-ApplyNow {
+    $root = $script:State.Root
+    if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) {
+        Set-Status 'S_FolderMissing'
+        return
+    }
+
+    Set-Status 'S_Applying'
+    $script:Ui.BtnApply.IsEnabled = $false
+
+    try {
+        $results = @(Set-WallpapersNow -Root $root -PositionName $script:State.Position)
+        $done    = @($results | Where-Object { $_.Applied }).Count
+
+        if ($done -eq $results.Count) { Set-Status 'S_Applied' @($done) }
+        else { Set-Status 'S_AppliedPartial' @($done, $results.Count) }
+    }
+    finally {
+        $script:Ui.BtnApply.IsEnabled = $true
+    }
+
+    Update-DisplayList
+}
+
+function Select-RowImage {
+    param([object] $Row)
+
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Title  = Get-Text 'S_PickTitle'
+    $dialog.Filter = 'Images|*.jpg;*.jpeg;*.png;*.bmp;*.webp|*.*|*.*'
+    if ($script:State.Root -and (Test-Path -LiteralPath $script:State.Root)) {
+        $dialog.InitialDirectory = $script:State.Root
+    }
+
+    if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+    if (-not $Row.DevicePath) { return }
+
+    Set-WallpaperAssignment -Root $script:State.Root `
+                            -DevicePath $Row.DevicePath `
+                            -Image $dialog.FileName `
+                            -Friendly $Row.Friendly `
+                            -Resolution ($Row.ResolutionText -replace ' ', '')
+
+    Update-DisplayList
+    Set-Status 'S_Saved'
+}
+
+function Invoke-RowCommand {
+    param([object] $EventArgs)
+
+    $source = $EventArgs.OriginalSource
+    if ($source -isnot [System.Windows.Controls.Button]) { return }
+
+    $row = $source.DataContext
+    if ($null -eq $row) { return }
+
+    switch ([string] $source.Tag) {
+        'pick' { Select-RowImage -Row $row }
+        'auto' {
+            Remove-WallpaperAssignment -Root $script:State.Root -DevicePath $row.DevicePath
+            Update-DisplayList
+            Set-Status 'S_Saved'
+        }
+    }
+}
+
+
+#------------------------------------------------------------------------------
+# Polling
+#------------------------------------------------------------------------------
+
+function Invoke-Tick {
+    # Cheap: a handful of EnumDisplayDevices calls. Kept on the UI thread on
+    # purpose; a worker runspace would be MTA and every IDesktopWallpaper call
+    # would cross an apartment boundary.
+    $signature = Get-DisplaySignature
+
+    if ($signature -eq $script:State.Signature) {
+        $script:State.Pending     = $null
+        $script:State.StableTicks = 0
+        return
+    }
+
+    # Debounce: docking emits several intermediate topologies, and rebuilding
+    # the list on each is visually chaotic.
+    if ($signature -ne $script:State.Pending) {
+        $script:State.Pending     = $signature
+        $script:State.StableTicks = 1
+        return
+    }
+
+    $script:State.StableTicks++
+    if ($script:State.StableTicks -lt 2) { return }
+
+    $script:State.Signature   = $signature
+    $script:State.Pending     = $null
+    $script:State.StableTicks = 0
+
+    Update-DisplayList
+
+    # The background task owns re-applying. Doing it here too would double
+    # apply and flash.
+    if ((Get-WallpaperTaskState).Installed) { Set-Status 'S_TopologyChanged' }
+    else { Set-Status 'S_TopologyChangedIdle' }
+}
+
+
+#------------------------------------------------------------------------------
+# Wiring
+#------------------------------------------------------------------------------
+
+Import-GuiSetting
+Set-DarkTheme
+
+$ui.TxtRoot.Text = $script:State.Root
+
+foreach ($item in $ui.CmbPosition.Items) {
+    if ([string] $item.Tag -eq $script:State.Position) { $ui.CmbPosition.SelectedItem = $item }
+}
+if ($null -eq $ui.CmbPosition.SelectedItem) { $ui.CmbPosition.SelectedIndex = 0 }
+
+$ui.BtnBrowse.Add_Click({
+    Invoke-Guarded {
+        $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dialog.Description = Get-Text 'S_BrowseTitle'
+        if ($script:State.Root -and (Test-Path -LiteralPath $script:State.Root)) {
+            $dialog.SelectedPath = $script:State.Root
+        }
+        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $script:Ui.TxtRoot.Text = $dialog.SelectedPath
+        }
+    }
+})
+
+$ui.TxtRoot.Add_LostFocus({
+    Invoke-Guarded {
+        $value = $script:Ui.TxtRoot.Text.Trim()
+        if ($value -eq $script:State.Root) { return }
+        $script:State.Root = $value
+        Export-GuiSetting
+        Update-DisplayList
+        Sync-AutoTask
+        Set-Status 'S_Saved'
+    }
+})
+
+$ui.CmbPosition.Add_SelectionChanged({
+    Invoke-Guarded {
+        if (-not $script:State.Loaded) { return }
+        $item = $script:Ui.CmbPosition.SelectedItem
+        if ($null -eq $item) { return }
+        $script:State.Position = [string] $item.Tag
+        Export-GuiSetting
+        Sync-AutoTask
+        Set-Status 'S_Saved'
+    }
+})
+
+$ui.BtnRefresh.Add_Click({ Invoke-Guarded { Update-DisplayList; Update-AutoState } })
+$ui.BtnApply.Add_Click({   Invoke-Guarded { Invoke-ApplyNow } })
+
+$ui.BtnLog.Add_Click({
+    Invoke-Guarded {
+        $log = Get-WallpaperLogPath
+        if (Test-Path -LiteralPath $log) { Start-Process -FilePath $log }
+    }
+})
+
+$ui.TglAuto.Add_Click({
+    Invoke-Guarded {
+        $wanted = [bool] $script:Ui.TglAuto.IsChecked
+        try { Set-AutoMode -Enabled $wanted }
+        catch {
+            $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoFailed'
+            Update-AutoState
+            throw
+        }
+    }
+})
+
+# One class handler rather than per-row subscriptions, so rebuilding the list
+# does not leak handlers.
+$ui.LstDisplays.AddHandler(
+    [System.Windows.Controls.Button]::ClickEvent,
+    [System.Windows.RoutedEventHandler] { Invoke-Guarded { Invoke-RowCommand -EventArgs $args[1] } })
+
+$timer = New-Object System.Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromSeconds(2)
+$timer.Add_Tick({ Invoke-Guarded { Invoke-Tick } })
+
+$window.Add_Loaded({
+    Invoke-Guarded {
+        $script:State.Signature = Get-DisplaySignature
+        Update-DisplayList
+        Update-AutoState
+        Set-Status 'S_Ready'
+        $script:State.Loaded = $true
+        $timer.Start()
+    }
+})
+
+$window.Add_Closed({ $timer.Stop() })
+
+$window.ShowDialog() | Out-Null
