@@ -156,7 +156,7 @@ finally { $reader.Dispose() }
 $ui = @{}
 foreach ($name in @('TxtRoot', 'BtnBrowse', 'CmbPosition', 'LstDisplays', 'BtnRefresh',
                     'TglAuto', 'TxtAutoState', 'TxtStatus', 'BtnLog', 'BtnApply',
-                    'BtnTheme')) {
+                    'BtnTheme', 'BtnAbout', 'IconSun', 'IconMoon')) {
     $control = $window.FindName($name)
     if ($null -eq $control) { throw ("MainWindow.xaml has no control named '{0}'." -f $name) }
     $ui[$name] = $control
@@ -224,8 +224,9 @@ function Get-WindowsDarkMode {
     catch { return $false }   # key absent on older builds: assume light
 }
 
-function Set-Theme {
-    param([bool] $Dark)
+function Set-WindowPalette {
+    # Takes the window so the about box can be themed the same way.
+    param([System.Windows.Window] $Target, [bool] $Dark)
 
     $palette = if ($Dark) { $script:Palette.Dark } else { $script:Palette.Light }
 
@@ -236,14 +237,41 @@ function Set-Theme {
         # Cast, or PowerShell stores its PSObject wrapper in the dictionary
         # (the indexer takes an object, so nothing forces an unwrap) and WPF
         # then tries to use the brush's ToString as the property value.
-        $window.Resources[$pair[0]] = [System.Windows.Media.Brush] $brush
+        $Target.Resources[$pair[0]] = [System.Windows.Media.Brush] $brush
     }
+}
 
+function Set-Theme {
+    param([bool] $Dark)
+
+    Set-WindowPalette -Target $window -Dark $Dark
     $script:State.Dark = $Dark
 
-    # The button offers the other theme, so it says where a click leads.
-    $script:Ui.BtnTheme.Content =
+    # The icon shows where a click leads, not where you are: a sun while the
+    # window is dark, a crescent while it is light.
+    $script:Ui.IconSun.Visibility  = if ($Dark) { 'Visible' }   else { 'Collapsed' }
+    $script:Ui.IconMoon.Visibility = if ($Dark) { 'Collapsed' } else { 'Visible' }
+    $script:Ui.BtnTheme.ToolTip    =
         if ($Dark) { Get-Text 'S_ThemeToLight' } else { Get-Text 'S_ThemeToDark' }
+}
+
+function Show-AboutWindow {
+    $path   = Join-Path $PSScriptRoot 'AboutWindow.xaml'
+    $reader = [System.Xml.XmlReader]::Create($path)
+    try   { $about = [System.Windows.Markup.XamlReader]::Load($reader) }
+    finally { $reader.Dispose() }
+
+    Set-WindowPalette -Target $about -Dark $script:State.Dark
+    $about.Owner = $window
+
+    $close = $about.FindName('BtnClose')
+    if ($close) {
+        # GetWindow($this) rather than the local $about: a handler resolves its
+        # variables against the script scope when it runs, not over a closure.
+        $close.Add_Click({ [System.Windows.Window]::GetWindow($this).Close() })
+    }
+
+    $about.ShowDialog() | Out-Null
 }
 
 
@@ -560,6 +588,8 @@ $ui.CmbPosition.Add_SelectionChanged({
         Set-Status 'S_Saved'
     }
 })
+
+$ui.BtnAbout.Add_Click({ Invoke-Guarded { Show-AboutWindow } })
 
 $ui.BtnTheme.Add_Click({
     Invoke-Guarded {

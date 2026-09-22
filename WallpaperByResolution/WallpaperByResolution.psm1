@@ -898,10 +898,27 @@ function Install-WallpaperTask {
         $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     }
 
-    $argList = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass ' +
-               ('-File "{0}" -WallpaperRoot "{1}" -Position {2}' -f $LauncherPath, $Root, $PositionName)
+    $psArgs = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass ' +
+              ('-File "{0}" -WallpaperRoot "{1}" -Position {2}' -f $LauncherPath, $Root, $PositionName)
 
-    $action = New-ScheduledTaskAction -Execute $hostExe -Argument $argList
+    # -WindowStyle Hidden still creates the console and only then hides it,
+    # which flashes a black window at every logon and every time the task is
+    # started. conhost --headless never creates one. It arrived in Windows 11
+    # 22H2; older builds keep the flash rather than route through Windows
+    # Script Host, which is disabled on many managed machines.
+    $conhost = Join-Path $env:SystemRoot 'System32\conhost.exe'
+
+    if (([System.Environment]::OSVersion.Version.Build -ge 22621) -and
+        (Test-Path -LiteralPath $conhost -PathType Leaf)) {
+        $execute  = $conhost
+        $argument = '--headless "{0}" {1}' -f $hostExe, $psArgs
+    }
+    else {
+        $execute  = $hostExe
+        $argument = $psArgs
+    }
+
+    $action = New-ScheduledTaskAction -Execute $execute -Argument $argument
 
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 

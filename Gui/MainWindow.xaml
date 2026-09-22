@@ -35,8 +35,9 @@
     <sys:String x:Key="S_NoThumb">Aperçu impossible pour ce format d'image.</sys:String>
     <sys:String x:Key="S_NotMatched">Windows ne distingue pas cet écran ; l'image sera appliquée partout.</sys:String>
     <sys:String x:Key="S_PickLabel">Choisir une image...</sys:String>
-    <sys:String x:Key="S_ThemeToDark">Thème sombre</sys:String>
-    <sys:String x:Key="S_ThemeToLight">Thème clair</sys:String>
+    <sys:String x:Key="S_ThemeToDark">Passer à l'apparence sombre</sys:String>
+    <sys:String x:Key="S_ThemeToLight">Passer à l'apparence claire</sys:String>
+    <sys:String x:Key="S_AboutTip">Ce que ce programme fait sur votre ordinateur</sys:String>
     <sys:String x:Key="S_ThemeTip">Bascule entre l'apparence claire et l'apparence sombre. Au premier lancement, celle de Windows est reprise.</sys:String>
     <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
 
@@ -136,6 +137,14 @@
           </ControlTemplate>
         </Setter.Value>
       </Setter>
+    </Style>
+
+    <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Padding" Value="7"/>
+      <Setter Property="Width" Value="34"/>
+      <Setter Property="Height" Value="34"/>
     </Style>
 
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -428,9 +437,35 @@
     </Rectangle>
 
     <DockPanel Grid.Row="1" Margin="20,16,20,0">
+      <Button DockPanel.Dock="Right" x:Name="BtnAbout" Margin="4,0,0,0"
+              Style="{StaticResource IconButton}" VerticalAlignment="Top"
+              ToolTip="{DynamicResource S_AboutTip}">
+        <Grid Width="20" Height="20">
+          <Ellipse Stroke="{DynamicResource SubtleBrush}" StrokeThickness="1.6"
+                   Width="18" Height="18"/>
+          <TextBlock Text="?" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource SubtleBrush}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+
       <Button DockPanel.Dock="Right" x:Name="BtnTheme"
-              Style="{StaticResource LinkButton}" VerticalAlignment="Top"
-              ToolTip="{DynamicResource S_ThemeTip}"/>
+              Style="{StaticResource IconButton}" VerticalAlignment="Top"
+              ToolTip="{DynamicResource S_ThemeTip}">
+        <Grid Width="20" Height="20">
+          <!-- Crescent shown while light: clicking goes dark. -->
+          <Path x:Name="IconMoon" Fill="{DynamicResource SubtleBrush}"
+                Data="M 13.8,2.6 A 8,8 0 1 0 13.8,17.4 A 6.4,6.4 0 1 1 13.8,2.6 Z"/>
+          <!-- Sun shown while dark: clicking goes light. -->
+          <Canvas x:Name="IconSun" Width="20" Height="20" Visibility="Collapsed">
+            <Ellipse Canvas.Left="6" Canvas.Top="6" Width="8" Height="8"
+                     Fill="{DynamicResource SubtleBrush}"/>
+            <Path Stroke="{DynamicResource SubtleBrush}" StrokeThickness="1.7"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                  Data="M 10,0.6 L 10,3 M 10,17 L 10,19.4 M 0.6,10 L 3,10 M 17,10 L 19.4,10 M 3.3,3.3 L 5,5 M 15,15 L 16.7,16.7 M 3.3,16.7 L 5,15 M 15,5 L 16.7,3.3"/>
+          </Canvas>
+        </Grid>
+      </Button>
       <StackPanel>
         <TextBlock Text="Fonds d'écran par écran" FontSize="20" FontWeight="SemiBold"/>
         <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."

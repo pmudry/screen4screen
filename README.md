@@ -62,7 +62,9 @@ Double-click `WallpaperGui.cmd`, or run:
 
 One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single switch. It refreshes itself when you dock or undock.
 
-It opens on `examples/wallpapers` the first time, and takes its light or dark appearance from Windows. The button in the top right switches between the two and remembers your choice.
+It opens on `examples/wallpapers` the first time, and takes its light or dark appearance from Windows. The sun/crescent button in the top right switches between the two and remembers your choice; the `?` next to it explains exactly what the tool changes on your machine.
+
+Turning the switch on registers the logon task through `conhost --headless`, so no console window flashes when it starts. Windows builds older than 22621 fall back to the plain host, where a brief flash remains.
 
 The timing knobs (`-PollSeconds`, `-SettleDelay`) are deliberately not in the window; they stay on the command line.
 

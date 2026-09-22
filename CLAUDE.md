@@ -90,6 +90,13 @@ Layout:
   applying a `.webp` wallpaper is unaffected, that path is Windows' own.
 - The window never re-applies on a topology change. That is the background
   task's job, and doing both would double-apply and flash.
+- **The scheduled task runs through `conhost.exe --headless`.** Passing
+  `-WindowStyle Hidden` to `powershell.exe` creates the console and only then
+  hides it, so a black window flashes at every logon and every time the task
+  starts. `conhost --headless` never creates one.
+- `AboutWindow.xaml` states plainly what the tool touches on the machine: the
+  wallpaper, the logon task, the log, the two JSON files, and what it does not
+  do. Keep it truthful if any of that changes.
 
 ## Conventions
 
@@ -114,8 +121,10 @@ Layout:
    interface path only: the friendly name cannot tell two identical panels
    apart, which was the whole point. Stored in the image folder, with the
    image path relative when it lives inside that folder.
-4. Console-flash-free launcher for the scheduled task (`conhost --headless`
-   on Windows 11, or a tiny `.vbs` shim for older builds).
+4. ~~Console-flash-free launcher for the scheduled task.~~ Done, via
+   `conhost --headless`. A `.vbs` shim was considered and rejected: Windows
+   Script Host is disabled on many managed machines. Builds older than 22621
+   fall back to the plain host and keep the flash.
 5. Optional event-driven trigger: hidden `NativeWindow` catching
    `WM_DISPLAYCHANGE`, with polling kept as a fallback.
 6. `-WhatIf` support on `Set-WallpapersNow`.
