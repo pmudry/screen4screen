@@ -8,6 +8,13 @@ Built for the usual laptop setup: a 1920x1200 panel, a 5120x2160 ultrawide at th
 
 No dependencies. PowerShell and Windows 8 or later, nothing else to install.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-dark.png">
+  <img src="assets/screenshot-light.png" alt="The screen4screen window: one row per screen, each with its preview, its resolution and the image it will get" width="860">
+</picture>
+
+The window speaks French, English, German and Italian, and follows Windows for both its language and its light or dark appearance.
+
 ## How it works
 
 1. Attached monitors are enumerated with `EnumDisplayDevices` and their native mode is read with `EnumDisplaySettings(ENUM_CURRENT_SETTINGS)`. This yields real pixels, unaffected by DPI scaling (a 5120x2160 display at 150 % reports 5120x2160, not 3413x1440).
@@ -17,7 +24,7 @@ No dependencies. PowerShell and Windows 8 or later, nothing else to install.
 
 ## Image naming
 
-Put your images in one folder (default `%USERPROFILE%\Pictures\Wallpapers`). For a given monitor the script tries, in order. Note that for each name a **folder is tried before a file**:
+Put your images in one folder (by default the `wallpapers` folder next to the script, which ships with three samples). For a given monitor the script tries, in order. Note that for each name a **folder is tried before a file**:
 
 | Priority | Name                    | Meaning                                      |
 |----------|-------------------------|----------------------------------------------|

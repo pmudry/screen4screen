@@ -355,8 +355,20 @@ what is running), and `IDesktopWallpaper::GetWallpaper` returning paths under
    announced every line it was not writing to the log. `Start-WallpaperWatch`
    and the window's private helpers carry a `SuppressMessageAttribute`
    instead, with the reason written where it applies.
-7. Publish to PowerShell Gallery. The module folder name already matches
-   the module name, so `Publish-Module -Path ./screen4screen` works.
+7. Publish to PowerShell Gallery - **probably not worth it, decide before
+   doing it.** `Publish-Module -Path ./Screen4Screen` runs, because the folder
+   name matches the module name, but it packages that folder and nothing else:
+   the `.psd1` and the `.psm1`, with no window, no launcher, no language
+   dictionaries and no sample images. Someone running `Install-Module
+   Screen4Screen` would get the command-line functions and find `-Gui` with
+   nothing to open. The wrapper's `Import-Module Screen4Screen` fallback
+   exists for exactly that install, so the shape is there if it is ever
+   wanted; it would need its own description saying plainly that it is the
+   engine without the window. A published version can be unlisted but never
+   replaced, so the version has to be right the first time, and the manifest
+   would want `LicenseUri` and `ReleaseNotes` before it was fit to show.
+   For a tool whose point is the window, the GitHub release is the better
+   channel.
 8. CI: PSScriptAnalyzer + Pester on `windows-latest`.
    `PSScriptAnalyzerSettings.psd1` is in place and the tree is clean: run
    `Invoke-ScriptAnalyzer -Path . -Recurse -Settings
