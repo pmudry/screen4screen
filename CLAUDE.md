@@ -229,6 +229,27 @@ later inside the interop layer; the entry scripts carry `#Requires -Version
 5.1`. The scheduled task always runs Windows PowerShell, because it is the
 one present on every install.
 
+## Testing the window against a real machine
+
+**Uninstall the task before exercising the window's own functions.** Calling
+`Set-RootFolder` -- which the Browse button, the text box and Apply all go
+through -- runs `Sync-AutoTask`, and that re-registers the scheduled task
+against whatever folder is being tried. Point it at a temporary folder, delete
+the folder, and the logon task is left applying from somewhere that no longer
+exists, with the old watcher orphaned and still running. The same call chain
+writes the folder into `gui-settings.json`, so the window reopens on the wrong
+one too. This is correct behaviour for a user changing the setting; it is a
+trap for a test harness, and it cost two rounds of clean-up before it was
+written down. Either turn the automation off first, or drive
+`Get-WallpaperPlan` and `Resolve-WallpaperCandidate` directly instead of the
+window's handlers.
+
+Symptoms worth recognising: several `powershell.exe -File screen4screen.ps1
+-WallpaperRoot ...` processes at once (each re-registration orphans the last,
+since `Register-ScheduledTask -Force` replaces the definition without stopping
+what is running), and `IDesktopWallpaper::GetWallpaper` returning paths under
+`%TEMP%`.
+
 ## GUI traps found the hard way
 
 - **A local `$plan` IS the `$Plan` parameter.** Variable names are

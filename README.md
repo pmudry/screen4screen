@@ -4,7 +4,7 @@
 
 Per-monitor wallpapers on Windows, chosen from each monitor's **native resolution**, re-applied automatically when you dock, undock or plug in an external display.
 
-Built for the usual laptop setup: a 1920x1200 panel, a 5120x2160 ultrawide at the desk, the odd 1920x1080 projector in a meeting room. Each one gets an image that was actually made for its aspect ratio instead of a cropped or stretched compromise.
+Built for the usual laptop setup: a 1920x1200 panel, a 5120x2160 ultrawide at the desk, the 1920x1080 projector in a meeting room. Each one gets an image that was actually made for its aspect ratio instead of a cropped or stretched compromise.
 
 No dependencies. PowerShell and Windows 8 or later, nothing else to install.
 
