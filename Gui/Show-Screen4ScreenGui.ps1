@@ -241,7 +241,8 @@ $script:Palette = @{
         @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
         @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD'),
         @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#FFD9DCE0'),
-        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FFFFFFFF')
+        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FFFFFFFF'),
+        @('PopupEdgeBrush',  '#FFAEB4BC')
     )
     Dark = @(
         @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',     '#FF24272B'),
@@ -251,7 +252,8 @@ $script:Palette = @{
         @('ThumbBrush',    '#FF2E3236'), @('HoverBrush',       '#FF2E3236'),
         @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057'),
         @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#00000000'),
-        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FF1F2226')
+        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FF1F2226'),
+        @('PopupEdgeBrush',  '#FF565C64')
     )
 }
 

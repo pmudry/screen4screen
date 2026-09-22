@@ -61,6 +61,7 @@
     <SolidColorBrush x:Key="FabEdgeBrush"     Color="#D9DCE0"/>
     <SolidColorBrush x:Key="FabIconBrush"     Color="#1A1C1E"/>
     <SolidColorBrush x:Key="PopupBrush"       Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="PopupEdgeBrush"   Color="#AEB4BC"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -273,15 +274,15 @@
               <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
                      VerticalOffset="4" AllowsTransparency="True" PopupAnimation="Fade"
                      IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
-                <Border CornerRadius="6" Padding="0,4" Margin="6"
+                <!-- No Margin and no shadow here on purpose. A margin leaves
+                     part of the popup window unpainted, and that area comes
+                     out white rather than transparent, which showed as a band
+                     under the list. The border carries the separation instead. -->
+                <Border CornerRadius="6" Padding="0,4"
                         Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                         MaxHeight="{TemplateBinding MaxDropDownHeight}"
                         Background="{DynamicResource PopupBrush}"
-                        BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
-                  <Border.Effect>
-                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270"
-                                      Opacity="0.28" Color="#000000"/>
-                  </Border.Effect>
+                        BorderBrush="{DynamicResource PopupEdgeBrush}" BorderThickness="1">
                   <ScrollViewer Background="Transparent">
                     <ItemsPresenter/>
                   </ScrollViewer>
