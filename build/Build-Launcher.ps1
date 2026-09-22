@@ -33,7 +33,7 @@ $out    = Join-Path $root 'screen4screen.exe'
 & $csc /nologo /target:winexe /platform:anycpu `
        ('/win32icon:' + $icon) `
        ('/out:' + $out) `
-       /r:System.dll /r:System.Windows.Forms.dll `
+       /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll `
        $source
 
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }

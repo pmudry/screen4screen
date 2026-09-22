@@ -89,6 +89,12 @@ $script:State = @{
     StableTicks  = 0
     TaskChecked  = 0
     Thumbs       = @{}
+    Queued       = @{}
+    Failed       = @{}
+    KeyPath      = @{}
+    Pool         = $null
+    Jobs         = @()
+    DrainTimer   = $null
     Notifier     = $null
     Deferred     = $null
     FallbackTick = 0
@@ -336,7 +342,40 @@ function Show-AboutWindow {
 # Thumbnails
 #------------------------------------------------------------------------------
 
-function New-Thumbnail {
+# Decoding one sample webp takes about half a second whatever DecodePixelWidth
+# asks for, because the codec expands the whole image before scaling. Done on
+# the UI thread that is half a second of wait cursor per monitor, so it runs in
+# a small runspace pool and comes back frozen, which is what makes a WPF image
+# safe to hand to another thread.
+#
+# A C# helper was tried first and dropped: Add-Type -ReferencedAssemblies adds
+# to the default reference set on Windows PowerShell but replaces it on
+# PowerShell 7, and neither host accepted one list. Runspaces need no compiler.
+$script:DecodeThumbnail = {
+    param([string] $Path, [int] $Width)
+
+    Add-Type -AssemblyName PresentationCore
+    try {
+        $stream = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+        try {
+            $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+            $bitmap.BeginInit()
+            $bitmap.CacheOption      = 'OnLoad'
+            $bitmap.DecodePixelWidth = $Width
+            $bitmap.StreamSource     = $stream
+            $bitmap.EndInit()
+            $bitmap.Freeze()
+            return $bitmap
+        }
+        finally { $stream.Dispose() }
+    }
+    catch { return $null }   # no codec for this format, typically
+}
+
+function Request-Thumbnail {
+    # Never blocks. Returns the image when it is already decoded, otherwise
+    # starts a background decode and returns $null; the drain timer rebuilds
+    # the list once results land.
     param([string] $Path)
 
     if (-not $Path) { return $null }
@@ -344,34 +383,85 @@ function New-Thumbnail {
 
     $info = Get-Item -LiteralPath $Path
     $key  = '{0}|{1}|{2}' -f $info.FullName, $info.LastWriteTimeUtc.Ticks, $info.Length
+
+    # A failed decode is cached as $null, so a missing codec is not retried on
+    # every refresh.
     if ($script:State.Thumbs.ContainsKey($key)) { return $script:State.Thumbs[$key] }
 
-    $image = $null
-    try {
-        # Loaded through a stream we dispose ourselves: BitmapImage with a
-        # UriSource keeps the file open and caches on the URI, so a replaced
-        # image would keep showing the old pixels.
-        $stream = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
-        try {
-            $image = New-Object System.Windows.Media.Imaging.BitmapImage
-            $image.BeginInit()
-            # OnLoad before EndInit is the load-bearing line: it decodes fully
-            # during EndInit so the stream can be closed immediately.
-            $image.CacheOption      = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
-            $image.DecodePixelWidth = 256
-            $image.StreamSource     = $stream
-            $image.EndInit()
-            $image.Freeze()
-        }
-        finally { $stream.Dispose() }
-    }
-    catch {
-        # No WIC codec for this format (webp on a stock Windows, typically).
-        $image = $null
+    if (-not $script:State.Queued.ContainsKey($key)) {
+        $script:State.Queued[$key]  = $true
+        $script:State.KeyPath[$key] = $Path
+        Start-ThumbnailDecode -Key $key -Path $info.FullName
     }
 
-    $script:State.Thumbs[$key] = $image
-    return $image
+    return $null
+}
+
+function Start-ThumbnailDecode {
+    param([string] $Key, [string] $Path)
+
+    if (-not $script:State.Pool) {
+        $pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(1, 2)
+        $pool.ApartmentState = 'STA'
+        $pool.Open()
+        $script:State.Pool = $pool
+    }
+
+    $shell = [System.Management.Automation.PowerShell]::Create()
+    $shell.RunspacePool = $script:State.Pool
+    [void] $shell.AddScript($script:DecodeThumbnail).AddArgument($Path).AddArgument(256)
+
+    $script:State.Jobs += [pscustomobject]@{
+        Key    = $Key
+        Shell  = $shell
+        Handle = $shell.BeginInvoke()
+    }
+
+    Start-ThumbnailDrain
+}
+
+function Start-ThumbnailDrain {
+    if ($script:State.DrainTimer) { return }
+
+    Set-Status 'S_LoadingPreviews'
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(120)
+    $timer.Add_Tick({ Invoke-Guarded { Invoke-ThumbnailDrain } })
+    $script:State.DrainTimer = $timer
+    $timer.Start()
+}
+
+function Invoke-ThumbnailDrain {
+    $pending = @()
+    $arrived = $false
+
+    foreach ($job in $script:State.Jobs) {
+        if (-not $job.Handle.IsCompleted) { $pending += $job; continue }
+
+        $image = $null
+        try   { $image = @($job.Shell.EndInvoke($job.Handle))[0] }
+        catch { $image = $null }
+        $job.Shell.Dispose()
+
+        $script:State.Thumbs[$job.Key] = $image
+        if ($null -eq $image -and $script:State.KeyPath.ContainsKey($job.Key)) {
+            $script:State.Failed[$script:State.KeyPath[$job.Key]] = $true
+        }
+        $arrived = $true
+    }
+
+    $script:State.Jobs = $pending
+
+    if ($arrived) { Update-DisplayList }
+
+    if ($script:State.Jobs.Count -eq 0) {
+        $script:State.DrainTimer.Stop()
+        $script:State.DrainTimer = $null
+        if ($script:Ui.TxtStatus.Text -eq (Get-Text 'S_LoadingPreviews')) {
+            $script:Ui.TxtStatus.Text = ''
+        }
+    }
 }
 
 
@@ -380,10 +470,8 @@ function New-Thumbnail {
 #------------------------------------------------------------------------------
 
 function Update-DisplayList {
-    # Decoding the thumbnails costs several hundred milliseconds each, so the
-    # first pass runs without them and a deferred pass fills them in.
-    param([switch] $SkipThumbnails)
-
+    # Never blocks: thumbnails that are not decoded yet come back as $null
+    # and the drain timer rebuilds the list once they land.
     $root = $script:State.Root
     $rows = New-Object System.Collections.ObjectModel.ObservableCollection[object]
 
@@ -434,8 +522,8 @@ function Update-DisplayList {
         if ($p.Image) {
             $row.ImageText  = (Split-Path $p.Image -Leaf) + '  '
             $row.SourceText = if ($isManual) { Get-Text 'S_SourceManual' } else { Get-Text 'S_SourceAuto' }
-            if (-not $SkipThumbnails) { $row.Thumbnail = New-Thumbnail -Path $p.Image }
-            if (-not $SkipThumbnails -and $null -eq $row.Thumbnail) {
+            $row.Thumbnail = Request-Thumbnail -Path $p.Image
+            if ($null -eq $row.Thumbnail -and $script:State.Failed.ContainsKey($p.Image)) {
                 $row.ProblemText       = Get-Text 'S_NoThumb'
                 $row.ProblemVisibility = 'Visible'
             }
@@ -580,6 +668,9 @@ function Invoke-RowCommand {
 #------------------------------------------------------------------------------
 
 function Start-DeferredLoad {
+    # Runs once the window is up. Deferring the list was tried and reverted:
+    # it did not make the window appear sooner, it only made it appear empty
+    # first. What is left here genuinely is not needed to paint anything.
     # Get-ScheduledTask is a CIM call costing close to a second, and the
     # thumbnails a few hundred milliseconds more. Both run once the window is
     # already on screen, so it appears immediately instead of after two
@@ -589,11 +680,10 @@ function Start-DeferredLoad {
     $timer.Add_Tick({
         $this.Stop()
         Invoke-Guarded {
-            Update-DisplayList
             Update-AutoState
-            if ($script:Ui.TxtStatus.Text -eq (Get-Text 'S_LoadingPreviews')) {
-                $script:Ui.TxtStatus.Text = ''
-            }
+
+            try   { $script:State.Notifier = New-Object WallByRes.DisplayNotifier }
+            catch { $script:State.Notifier = $null }   # fall back to polling
         }
     })
     $timer.Start()
@@ -762,14 +852,10 @@ $timer.Add_Tick({ Invoke-Guarded { Invoke-Tick } })
 
 $window.Add_Loaded({
     Invoke-Guarded {
-        try   { $script:State.Notifier = New-Object WallByRes.DisplayNotifier }
-        catch { $script:State.Notifier = $null }   # fall back to polling
-
         $script:State.Signature = Get-DisplaySignature
-        Update-DisplayList -SkipThumbnails
+        Update-DisplayList
         $script:State.Loaded = $true
         $timer.Start()
-        Set-Status 'S_LoadingPreviews'
         Start-DeferredLoad
     }
 })
@@ -777,6 +863,7 @@ $window.Add_Loaded({
 $window.Add_Closed({
     $timer.Stop()
     if ($script:State.Notifier) { $script:State.Notifier.Dispose() }
+    if ($script:State.Pool) { $script:State.Pool.Close(); $script:State.Pool.Dispose() }
 })
 
 $window.ShowDialog() | Out-Null

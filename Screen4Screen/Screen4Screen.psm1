@@ -1089,23 +1089,56 @@ function Get-WallpaperTaskState {
     <#
     .SYNOPSIS
         Whether the logon task exists and whether it is currently running.
+    .DESCRIPTION
+        Uses the Task Scheduler COM API rather than Get-ScheduledTask. The CIM
+        cmdlet costs around 700 ms on a normal machine and this is queried
+        every time the window opens or the state changes, which was most of
+        the launch time; the COM call costs around 40 ms. Get-ScheduledTask
+        stays as a fallback for hosts where the COM service cannot be reached.
     #>
     [CmdletBinding()]
     param()
 
-    $task = $null
-    try   { $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction Stop }
-    catch { $task = $null }
+    $absent = [pscustomobject]@{ Installed = $false; Running = $false; State = 'NotInstalled' }
 
-    if (-not $task) {
-        return [pscustomobject]@{ Installed = $false; Running = $false; State = 'NotInstalled' }
+    $service = $null
+    try {
+        $service = New-Object -ComObject Schedule.Service
+        $service.Connect()
+    }
+    catch { $service = $null }
+
+    if ($service) {
+        try {
+            $task = $service.GetFolder('\').GetTask($script:TaskName)
+        }
+        catch {
+            return $absent      # GetTask throws when it is simply not there
+        }
+
+        # TASK_STATE enumeration
+        $value = [int] $task.State
+        $name  = switch ($value) {
+            0 { 'Unknown' }  1 { 'Disabled' } 2 { 'Queued' }
+            3 { 'Ready' }    4 { 'Running' }  default { 'Unknown' }
+        }
+
+        return [pscustomobject]@{
+            Installed = $true
+            Running   = ($value -eq 4)
+            State     = $name
+        }
     }
 
-    return [pscustomobject]@{
-        Installed = $true
-        Running   = ($task.State -eq 'Running')
-        State     = [string] $task.State
+    try {
+        $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction Stop
+        return [pscustomobject]@{
+            Installed = $true
+            Running   = ($task.State -eq 'Running')
+            State     = [string] $task.State
+        }
     }
+    catch { return $absent }
 }
 
 function Install-WallpaperTask {

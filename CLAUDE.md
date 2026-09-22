@@ -104,11 +104,24 @@ Layout:
   image would keep showing old pixels. `.webp` has no WIC decoder on a stock
   Windows, so every thumbnail load is wrapped and degrades to a blank tile;
   applying a `.webp` wallpaper is unaffected, that path is Windows' own.
-- **The window paints before the two slow calls run.** `Get-ScheduledTask`
-  costs about 900 ms and decoding one 4.8 MB webp thumbnail about 650 ms,
-  which together were most of the launch time. Both now run from a one-shot
-  `DispatcherTimer` once the window is up, so it appears in roughly 1.2 s
-  instead of 2.2 s. Measure before moving work back into `Add_Loaded`.
+- **Launch cost has been measured; do not guess at it.** Roughly: 300 ms for
+  the PowerShell process, 100 ms for the module, 250 ms to parse the XAML,
+  350 ms for the first WPF render. That is the floor for a PowerShell-hosted
+  WPF window, so `screen4screen.exe` shows a splash within a few tens of
+  milliseconds and closes it when the real window appears. Deferring the
+  list build was tried and reverted: it did not make the window appear
+  sooner, only emptier.
+- **`Get-WallpaperTaskState` uses the Task Scheduler COM API**, not
+  `Get-ScheduledTask`. The cmdlet costs about 700 ms against 40 ms for COM,
+  and this is queried on every state change.
+- **Thumbnails decode in a runspace pool, never on the UI thread.** One
+  sample webp takes about half a second no matter what `DecodePixelWidth`
+  says, because the codec expands the whole image before scaling; on the UI
+  thread that is a wait cursor per monitor. They come back `Freeze()`d,
+  which is what makes a WPF image safe to cross threads. A C# helper was
+  tried first and dropped: `Add-Type -ReferencedAssemblies` adds to the
+  default reference set on Windows PowerShell but replaces it on
+  PowerShell 7, and no single list satisfied both.
 - The embedded C# is compiled once into a cached DLL under the data folder,
   named after a hash of the source. Worth a little, not the bottleneck.
 - The window never re-applies on a topology change. That is the background
