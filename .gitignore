@@ -1,6 +1,9 @@
-# Local test images: keep the repo free of binaries
+# Local test images: only the three ISC sample backgrounds are tracked
 examples/wallpapers/*
 !examples/wallpapers/README.md
+!examples/wallpapers/5120x2160.webp
+!examples/wallpapers/ratio-16x9.webp
+!examples/wallpapers/default.webp
 
 # PowerShell / editor leftovers
 *.log

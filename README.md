@@ -25,7 +25,7 @@ Put your images in one folder (default `%USERPROFILE%\Pictures\Wallpapers`). For
 | 4        | `ratio-8x5\`            | folder: random image from it                 |
 | 5        | `default.jpg`           | fallback                                     |
 
-Extensions: `.jpg`, `.jpeg`, `.png`, `.bmp`.
+Extensions: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp`.
 
 Reduced ratios for common panels:
 

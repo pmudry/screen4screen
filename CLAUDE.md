@@ -37,6 +37,18 @@ Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
   union is flattened as `dmPositionX/Y + dmDisplayOrientation +
   dmDisplayFixedOutput` (16 bytes, matches both union arms). Do not
   reorder fields.
+- **Never pass `$null` to a P/Invoke or COM `[string]` parameter.** PowerShell
+  binds `$null` as the empty string, and `EnumDisplayDevices("")` fails where
+  `EnumDisplayDevices(NULL)` enumerates the adapters. This silently returned
+  zero displays until it was tracked down. Use `[NullString]::Value`; the two
+  call sites (adapter enumeration, and the all-monitors `SetWallpaper`) are
+  commented in place.
+- **All `IDesktopWallpaper` calls live in the C# `Wallpaper` helper class.**
+  PowerShell cannot drive the interface itself: `New-Object` plus a cast to a
+  `[ComImport]` interface does not issue the QueryInterface, and an object
+  returned as `IDesktopWallpaper` arrives back in PowerShell as
+  `System.__ComObject` with no methods, the interface being IUnknown-only with
+  no IDispatch. Add new COM calls to that class, not to the script body.
 
 ## Conventions
 
@@ -45,7 +57,8 @@ Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
 - `Set-StrictMode -Version Latest` is on. Keep it on.
 - Functions are `Verb-Noun` with approved verbs.
 - Log through `Write-Log`; never let logging throw.
-- No external modules, no binaries in the repo.
+- No external modules. The only binaries tracked are the three ISC sample
+  backgrounds under `examples/wallpapers/`; keep it that way.
 
 ## Roadmap (rough priority order)
 

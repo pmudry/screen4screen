@@ -20,7 +20,7 @@
         ratio-8x5\             folder: a random image from it
         default.jpg            fallback
 
-    Recognised extensions: .jpg .jpeg .png .bmp
+    Recognised extensions: .jpg .jpeg .png .bmp .webp
 
     Useful reduced aspect ratios:
         1920x1200 -> ratio-8x5
@@ -130,6 +130,7 @@ if (-not ('WallByRes.Native' -as [type])) {
 
     $cs = @'
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace WallByRes
@@ -250,6 +251,53 @@ namespace WallByRes
     [Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD")]
     [ClassInterface(ClassInterfaceType.None)]
     public class DesktopWallpaperClass { }
+
+    // Every IDesktopWallpaper call goes through here. PowerShell cannot call
+    // the interface itself: the object comes back as System.__ComObject and,
+    // the interface being IUnknown-only with no IDispatch, PowerShell finds
+    // no methods on it. Keeping the calls on this side also keeps the COM
+    // lifetime contained.
+    public static class Wallpaper
+    {
+        private static IDesktopWallpaper Create()
+        {
+            Type t = Type.GetTypeFromCLSID(
+                         new Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD"));
+            return (IDesktopWallpaper) Activator.CreateInstance(t);
+        }
+
+        // Monitor interface paths Windows currently knows about. The list
+        // includes monitors that are no longer connected, so callers match
+        // on path rather than on index.
+        public static string[] GetMonitorPaths()
+        {
+            IDesktopWallpaper w = Create();
+            try
+            {
+                List<string> paths = new List<string>();
+                uint n = w.GetMonitorDevicePathCount();
+                for (uint i = 0; i < n; i++)
+                {
+                    string path = w.GetMonitorDevicePathAt(i);
+                    if (!String.IsNullOrEmpty(path)) { paths.Add(path); }
+                }
+                return paths.ToArray();
+            }
+            finally { Marshal.ReleaseComObject(w); }
+        }
+
+        // A null monitorId applies the image to every monitor.
+        public static void Apply(string monitorId, string imagePath, int position)
+        {
+            IDesktopWallpaper w = Create();
+            try
+            {
+                w.SetPosition(position);
+                w.SetWallpaper(monitorId, imagePath);
+            }
+            finally { Marshal.ReleaseComObject(w); }
+        }
+    }
 }
 '@
 
@@ -276,7 +324,11 @@ function Get-AttachedDisplay {
         $adapter    = New-Object WallByRes.DISPLAY_DEVICE
         $adapter.cb = [System.Runtime.InteropServices.Marshal]::SizeOf($adapter)
 
-        if (-not [WallByRes.Native]::EnumDisplayDevices($null, $index, [ref] $adapter, 0)) { break }
+        # [NullString]::Value, never $null: PowerShell binds $null to a [string]
+        # parameter as the empty string, and EnumDisplayDevices("") fails where
+        # EnumDisplayDevices(NULL) enumerates the adapters.
+        if (-not [WallByRes.Native]::EnumDisplayDevices(
+                     [NullString]::Value, $index, [ref] $adapter, 0)) { break }
         $index++
 
         if (-not ($adapter.StateFlags -band [WallByRes.Native]::DISPLAY_DEVICE_ATTACHED)) { continue }
@@ -332,7 +384,7 @@ function Resolve-WallpaperFile {
         [string] $Root
     )
 
-    $extensions = @('.jpg', '.jpeg', '.png', '.bmp')
+    $extensions = @('.jpg', '.jpeg', '.png', '.bmp', '.webp')
 
     $gcd   = Get-Gcd $Width $Height
     if ($gcd -eq 0) { $gcd = 1 }
@@ -386,19 +438,11 @@ function Set-WallpapersNow {
         return
     }
 
-    $wall = [WallByRes.IDesktopWallpaper] (New-Object WallByRes.DesktopWallpaperClass)
-
-    try { $wall.SetPosition($PositionValue[$PositionName]) } catch { }
+    $position = $PositionValue[$PositionName]
 
     # Monitor paths known to Windows, used for matching
     $known = @()
-    try {
-        $count = $wall.GetMonitorDevicePathCount()
-        for ($i = 0; $i -lt $count; $i++) {
-            $p = $wall.GetMonitorDevicePathAt([uint32] $i)
-            if ($p) { $known += $p }
-        }
-    }
+    try   { $known = @([WallByRes.Wallpaper]::GetMonitorPaths()) }
     catch { Write-Log "IDesktopWallpaper enumeration failed: $($_.Exception.Message)" 'WARN' }
 
     $applied = 0
@@ -421,8 +465,10 @@ function Set-WallpapersNow {
 
         if (-not $target) {
             if ($displays.Count -eq 1) {
-                # Single display: $null means "all monitors"
-                $target = $null
+                # Single display: a NULL monitor ID means "all monitors".
+                # Same trap as the adapter enumeration above: a plain $null
+                # would reach COM as "" and the call would fail.
+                $target = [NullString]::Value
                 Write-Log ("Path match failed for {0}, applying globally." -f $d.Friendly) 'WARN'
             }
             else {
@@ -433,7 +479,7 @@ function Set-WallpapersNow {
         }
 
         try {
-            $wall.SetWallpaper($target, $image)
+            [WallByRes.Wallpaper]::Apply($target, $image, $position)
             $applied++
             Write-Log ("{0}  {1}x{2}  ->  {3}" -f $d.Friendly, $d.Width, $d.Height, (Split-Path $image -Leaf))
         }
@@ -442,7 +488,6 @@ function Set-WallpapersNow {
         }
     }
 
-    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wall) | Out-Null
     Write-Log ("{0}/{1} monitor(s) handled." -f $applied, $displays.Count)
 }
 
