@@ -492,6 +492,18 @@ function Show-AboutWindow {
     Set-WindowIcon     -Target $about
     $about.Owner = $window
 
+    # The same mark Explorer and the taskbar show. Set from here rather than
+    # from the markup: XamlReader.Load leaves the tree without a BaseUri, so a
+    # relative URI in the XAML would have nothing to resolve against.
+    $logo = $about.FindName('ImgLogo')
+    if ($logo) {
+        $mark = Join-Path (Split-Path $PSScriptRoot -Parent) 'assets\screen4screen.png'
+        if (Test-Path -LiteralPath $mark -PathType Leaf) {
+            try { $logo.Source = New-Object System.Windows.Media.Imaging.BitmapImage ([Uri] $mark) }
+            catch { }   # a missing mark is not worth failing the window over
+        }
+    }
+
     $version = $about.FindName('TxtVersion')
     if ($version) {
         $module = Get-Module Screen4Screen

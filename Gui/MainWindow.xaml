@@ -48,6 +48,17 @@
       <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
     </Style>
 
+    <!-- The app name. Ideal rather than the Display the implicit style sets:
+         Display snaps glyphs to the pixel grid, which is right for 13px UI
+         text and thins a 21px semibold heading until it reads grey instead of
+         solid. -->
+    <Style x:Key="Title1" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="FontSize" Value="21"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+    </Style>
+
     <Style x:Key="Subtle" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource SubtleBrush}"/>
       <Setter Property="FontSize" Value="12"/>
@@ -585,7 +596,7 @@
         </Grid>
       </Button>
       <StackPanel>
-        <TextBlock Text="screen4screen" FontSize="21" FontWeight="SemiBold"/>
+        <TextBlock Text="screen4screen" Style="{StaticResource Title1}"/>
         <TextBlock Text="{DynamicResource S_Tagline}"
                    Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
       </StackPanel>
