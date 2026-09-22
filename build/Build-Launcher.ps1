@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     Uses the C# compiler that ships with the .NET Framework, so nothing needs
-    installing. The resulting .exe is not tracked in git; run this once after
-    cloning if you want the icon in Explorer.
+    installing. The resulting .exe IS tracked, so that a clone can be
+    double-clicked without a build step: commit the rebuilt binary along with
+    whatever change prompted the rebuild.
 
     The .exe only starts PowerShell on screen4screen.ps1: it does not carry a
     copy of the window or the module, which are read at launch. So editing

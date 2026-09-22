@@ -56,13 +56,15 @@ Reduced ratios for common panels:
 
 ## The graphical manager
 
-Build the launcher once, then double-click `screen4screen.exe`:
+Double-click `screen4screen.exe`. It ships with the repository, so a clone works straight away.
+
+It carries the program icon in Explorer and opens the window with no console at all. To rebuild it after changing `build/Launcher.cs` or the icon:
 
 ```powershell
 .\build\Build-Launcher.ps1
 ```
 
-It carries the program icon in Explorer and opens the window with no console at all. The compiler it uses ships with Windows, so nothing needs installing, and the `.exe` is not tracked in git. `screen4screen.cmd` works without the build step but shows a console window.
+The compiler it uses ships with Windows, so nothing needs installing. `screen4screen.cmd` does the same job without the `.exe`, but shows a console window.
 
 You can also run:
 

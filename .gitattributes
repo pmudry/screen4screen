@@ -12,3 +12,4 @@
 *.bmp  binary
 *.webp binary
 *.ico  binary
+*.exe  binary

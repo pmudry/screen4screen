@@ -21,5 +21,7 @@ desktop.ini
 TestResults/
 coverage.xml
 
-# Built launcher (run build/Build-Launcher.ps1 to produce it)
-screen4screen.exe
+# screen4screen.exe is deliberately NOT ignored: it is committed so the
+# repository can be cloned and double-clicked without a build step. Rebuild
+# and commit it whenever build/Launcher.cs or assets/screen4screen.ico
+# changes; nothing else needs it.
