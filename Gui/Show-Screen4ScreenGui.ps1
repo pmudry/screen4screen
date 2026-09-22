@@ -94,6 +94,7 @@ $script:State = @{
     KeyPath      = @{}
     Pool         = $null
     Jobs         = @()
+    WantAuto     = $false
     DrainTimer   = $null
     Notifier     = $null
     Deferred     = $null
@@ -205,6 +206,24 @@ function Invoke-Deferred {
     $timer.Start()
 }
 
+function Write-GuiLog {
+    # The status line tells the user to look in the log, so something has to
+    # actually be there. Write-Warning goes nowhere in a process with no
+    # console, which is exactly how the window is launched.
+    param([string] $Message)
+
+    try {
+        $path = Get-WallpaperLogPath
+        $dir  = Split-Path $path -Parent
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $line = '{0}  {1,-5}  {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), 'GUI', $Message
+        Add-Content -LiteralPath $path -Value $line -Encoding UTF8
+    }
+    catch { }   # logging must never break the window
+}
+
 function Invoke-Guarded {
     # No Application object means no DispatcherUnhandledException hook, so an
     # exception escaping a handler would kill the window with no message.
@@ -212,7 +231,8 @@ function Invoke-Guarded {
     try { & $Body }
     catch {
         try { $script:Ui.TxtStatus.Text = Get-Text 'S_Error' } catch { }
-        Write-Warning ("GUI: {0}" -f $_.Exception.Message)
+        Write-GuiLog ("{0} | at {1}" -f $_.Exception.Message,
+                      ($_.ScriptStackTrace -replace "`r?`n", ' <- '))
     }
 }
 
@@ -822,21 +842,29 @@ $ui.BtnLog.Add_Click({
 
 $ui.TglAuto.Add_Click({
     Invoke-Guarded {
-        $wanted = [bool] $script:Ui.TglAuto.IsChecked
+        # Carried through $script:State, never a closure. GetNewClosure gives
+        # the block its own script scope, so $script:Ui resolves to $null
+        # inside it and every control access throws.
+        $script:State.WantAuto = [bool] $script:Ui.TglAuto.IsChecked
         $script:Ui.TglAuto.IsEnabled = $false
         Set-Status 'S_Working'
 
         Invoke-Deferred {
-            try { Set-AutoMode -Enabled $wanted }
+            try { Set-AutoMode -Enabled $script:State.WantAuto }
             catch {
-                $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoFailed'
+                Write-GuiLog ('Set-AutoMode({0}) failed: {1} | at {2}' -f $script:State.WantAuto,
+                              $_.Exception.Message,
+                              ($_.ScriptStackTrace -replace "`r?`n", ' <- '))
+                # Re-read the truth first, then say it failed: calling
+                # Update-AutoState afterwards would overwrite the message.
                 Update-AutoState
+                $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoFailed'
             }
             finally {
                 $script:Ui.TglAuto.IsEnabled = $true
                 $script:Ui.TxtStatus.Text = ''
             }
-        }.GetNewClosure()
+        }
     }
 })
 
