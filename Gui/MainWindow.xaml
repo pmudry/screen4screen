@@ -2,7 +2,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="Fonds d'écran par écran"
+        Title="screen4screen"
         Width="820" Height="640" MinWidth="680" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" FontSize="13"
@@ -41,7 +41,7 @@
     <sys:String x:Key="S_ThemeTip">Bascule entre l'apparence claire et l'apparence sombre. Au premier lancement, celle de Windows est reprise.</sys:String>
     <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
 
-    <!-- Light values. Show-WallpaperGui.ps1 replaces every one of these when
+    <!-- Light values. Show-Screen4ScreenGui.ps1 replaces every one of these when
          Windows is in dark mode, which is why nothing below uses
          StaticResource for a colour: only DynamicResource re-resolves. -->
     <SolidColorBrush x:Key="WindowBrush"      Color="#FFFFFF"/>
@@ -56,6 +56,7 @@
     <SolidColorBrush x:Key="HoverBrush"       Color="#E8EAEC"/>
     <SolidColorBrush x:Key="PressedBrush"     Color="#DCDFE3"/>
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4C8CD"/>
+    <SolidColorBrush x:Key="FabBrush"         Color="#ECEEF0"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -74,7 +75,8 @@
     </Style>
 
     <Style TargetType="Button">
-      <Setter Property="Padding" Value="14,7"/>
+      <Setter Property="Padding" Value="18,7"/>
+      <Setter Property="MinHeight" Value="36"/>
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush2}"/>
@@ -84,7 +86,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="4"
+            <Border x:Name="Bd" CornerRadius="18"
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}">
@@ -112,11 +114,13 @@
       <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="20,8"/>
+      <Setter Property="Padding" Value="24,9"/>
+      <Setter Property="MinHeight" Value="38"/>
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="4"
+            <Border x:Name="Bd" CornerRadius="19"
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}">
@@ -139,12 +143,42 @@
       </Setter>
     </Style>
 
-    <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
-      <Setter Property="Padding" Value="7"/>
-      <Setter Property="Width" Value="34"/>
-      <Setter Property="Height" Value="34"/>
+    <!-- The circular control used across the ISC sites: 44 px, round,
+         a soft shadow, and a lift on hover. WPF has no backdrop blur, so the
+         glass effect is approximated with a flat translucent surface. -->
+    <Style x:Key="IconButton" TargetType="Button">
+      <Setter Property="Width" Value="44"/>
+      <Setter Property="Height" Value="44"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="{DynamicResource FabBrush}"/>
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Ellipse x:Name="Bd" Fill="{TemplateBinding Background}">
+                <Ellipse.Effect>
+                  <DropShadowEffect BlurRadius="10" ShadowDepth="2" Direction="270"
+                                    Opacity="0.20" Color="#000000"/>
+                </Ellipse.Effect>
+              </Ellipse>
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="RenderTransform">
+                  <Setter.Value><ScaleTransform ScaleX="1.1" ScaleY="1.1"/></Setter.Value>
+                </Setter>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter Property="RenderTransform">
+                  <Setter.Value><ScaleTransform ScaleX="0.95" ScaleY="0.95"/></Setter.Value>
+                </Setter>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -160,11 +194,12 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
       <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="Padding" Value="14,7"/>
+      <Setter Property="MinHeight" Value="36"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
-            <Border x:Name="Bd" CornerRadius="4"
+            <Border x:Name="Bd" CornerRadius="18"
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}">
@@ -191,7 +226,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" CornerRadius="4"
+            <Border x:Name="Bd" CornerRadius="18"
                     Background="{DynamicResource FieldBrush}"
                     BorderBrush="{DynamicResource BorderBrush2}"
                     BorderThickness="1">
@@ -214,7 +249,7 @@
 
     <Style TargetType="ComboBox">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="MinHeight" Value="36"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -228,7 +263,7 @@
                                 Content="{TemplateBinding SelectionBoxItem}"
                                 ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                 ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                Margin="11,0,30,0" VerticalAlignment="Center"/>
+                                Margin="15,0,32,0" VerticalAlignment="Center"/>
               <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
                      AllowsTransparency="True" PopupAnimation="Fade"
                      IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
@@ -437,7 +472,7 @@
     </Rectangle>
 
     <DockPanel Grid.Row="1" Margin="20,16,20,0">
-      <Button DockPanel.Dock="Right" x:Name="BtnAbout" Margin="4,0,0,0"
+      <Button DockPanel.Dock="Right" x:Name="BtnAbout" Margin="8,0,0,0"
               Style="{StaticResource IconButton}" VerticalAlignment="Top"
               ToolTip="{DynamicResource S_AboutTip}">
         <Grid Width="20" Height="20">
@@ -467,7 +502,7 @@
         </Grid>
       </Button>
       <StackPanel>
-        <TextBlock Text="Fonds d'écran par écran" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="screen4screen" FontSize="21" FontWeight="SemiBold"/>
         <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."
                    Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
       </StackPanel>

@@ -3,7 +3,7 @@
 Drop images here to try the script against this folder:
 
 ```powershell
-.\Set-WallpaperByResolution.ps1 -Once -Verbose -WallpaperRoot .\examples\wallpapers
+.\screen4screen.ps1 -Once -Verbose -WallpaperRoot .\examples\wallpapers
 ```
 
 Three ISC backgrounds ship here, already named for the lookup:

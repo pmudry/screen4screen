@@ -12,7 +12,7 @@
     (Windows 8 and later).
 
     This file is a thin command-line wrapper. The logic lives in the
-    WallpaperByResolution module next to it.
+    Screen4Screen module next to it.
 
     Naming convention inside -WallpaperRoot, in decreasing priority for a
     1920x1200 monitor. For each name a FOLDER is tried before a FILE:
@@ -50,7 +50,7 @@
     Apply once and exit. Handy for testing.
 
 .PARAMETER Install
-    Registers a scheduled task "WallpaperByResolution" that runs this
+    Registers a scheduled task "screen4screen" that runs this
     script in the background at every logon.
 
 .PARAMETER Uninstall
@@ -65,11 +65,11 @@
 
 .EXAMPLE
     # Test: show what is detected and apply once
-    .\Set-WallpaperByResolution.ps1 -Once -Verbose
+    .\screen4screen.ps1 -Once -Verbose
 
 .EXAMPLE
     # Install as a permanent background task
-    .\Set-WallpaperByResolution.ps1 -Install -WallpaperRoot 'D:\Wallpapers'
+    .\screen4screen.ps1 -Install -WallpaperRoot 'D:\Wallpapers'
 
 .NOTES
     Turn off Windows Spotlight / the wallpaper slideshow in
@@ -99,13 +99,13 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$manifest = Join-Path $PSScriptRoot 'WallpaperByResolution\WallpaperByResolution.psd1'
+$manifest = Join-Path $PSScriptRoot 'Screen4Screen\Screen4Screen.psd1'
 if (Test-Path -LiteralPath $manifest) {
     Import-Module $manifest -Force -ErrorAction Stop -Verbose:$false
 }
 else {
     # Installed from the gallery rather than run from a clone.
-    Import-Module WallpaperByResolution -ErrorAction Stop -Verbose:$false
+    Import-Module Screen4Screen -ErrorAction Stop -Verbose:$false
 }
 
 
@@ -114,7 +114,7 @@ else {
 #------------------------------------------------------------------------------
 
 if ($Gui) {
-    & (Join-Path $PSScriptRoot 'Gui\Show-WallpaperGui.ps1')
+    & (Join-Path $PSScriptRoot 'Gui\Show-Screen4ScreenGui.ps1')
     return
 }
 
@@ -134,12 +134,12 @@ if ($Install) {
                           -PositionName $Position `
                           -LauncherPath $PSCommandPath
 
-    Write-Host "Task 'WallpaperByResolution' registered." -ForegroundColor Green
+    Write-Host "Task 'screen4screen' registered." -ForegroundColor Green
     Write-Host "Images  : $WallpaperRoot"
     Write-Host ("Log     : {0}" -f (Get-WallpaperLogPath))
     Write-Host ''
     Write-Host 'Start it now with:' -ForegroundColor Cyan
-    Write-Host '  Start-ScheduledTask -TaskName WallpaperByResolution'
+    Write-Host '  Start-ScheduledTask -TaskName screen4screen'
     return
 }
 

@@ -1,5 +1,5 @@
 <#
-    WallpaperByResolution
+    screen4screen
 
     Per-monitor Windows wallpapers, chosen from each monitor's native
     resolution. See the repository README for the naming convention and
@@ -17,16 +17,16 @@ Set-StrictMode -Version Latest
 # Module state
 #------------------------------------------------------------------------------
 
-$script:TaskName = 'WallpaperByResolution'
+$script:TaskName = 'screen4screen'
 
 # $env:LOCALAPPDATA is null off Windows, and Join-Path would fail to bind at
 # import time. The module must still import on Linux so the pure-PowerShell
 # parts stay testable in CI.
 $script:LogDir = if ($env:LOCALAPPDATA) {
-                     Join-Path $env:LOCALAPPDATA 'WallpaperByResolution'
+                     Join-Path $env:LOCALAPPDATA 'screen4screen'
                  }
                  else {
-                     Join-Path ([System.IO.Path]::GetTempPath()) 'WallpaperByResolution'
+                     Join-Path ([System.IO.Path]::GetTempPath()) 'screen4screen'
                  }
 
 $script:LogFile        = Join-Path $script:LogDir 'log.txt'
@@ -881,7 +881,7 @@ function Install-WallpaperTask {
     )
 
     if (-not $LauncherPath) {
-        $LauncherPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Set-WallpaperByResolution.ps1'
+        $LauncherPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'screen4screen.ps1'
     }
 
     if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) {
@@ -933,6 +933,16 @@ function Install-WallpaperTask {
                      -UserId "$env:USERDOMAIN\$env:USERNAME" `
                      -LogonType Interactive `
                      -RunLevel Limited
+
+    # The tool registered its task as WallpaperByResolution before it was
+    # renamed. Drop a leftover from that name, or both would run and fight
+    # over the wallpaper.
+    $legacy = 'WallpaperByResolution'
+    if (Get-ScheduledTask -TaskName $legacy -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask       -TaskName $legacy -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $legacy -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Log ("Removed the task left behind by the previous name: {0}" -f $legacy) 'WARN'
+    }
 
     Register-ScheduledTask -TaskName $script:TaskName `
                            -Action $action `

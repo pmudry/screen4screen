@@ -1,5 +1,5 @@
 @{
-    RootModule        = 'WallpaperByResolution.psm1'
+    RootModule        = 'Screen4Screen.psm1'
     ModuleVersion     = '1.0.0'
     GUID              = 'b7c4f2a1-9d3e-4c58-8f06-2a1e5d7b4c93'
     Author            = 'Pierre-Andre Mudry'
@@ -33,7 +33,7 @@
     PrivateData = @{
         PSData = @{
             Tags       = @('Wallpaper', 'Monitor', 'Desktop', 'Windows')
-            ProjectUri = 'https://github.com/pmudry/wallpaper-by-resolution'
+            ProjectUri = 'https://github.com/pmudry/screen4screen'
         }
     }
 }

@@ -1,4 +1,6 @@
-# wallpaper-by-resolution
+# screen4screen
+
+<img src="assets/screen4screen.png" width="96" align="right" alt="">
 
 Per-monitor wallpapers on Windows, chosen from each monitor's **native resolution**, re-applied automatically when you dock, undock or plug in an external display.
 
@@ -33,7 +35,7 @@ Extensions: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp`.
 The table above keys off resolution, which cannot tell two identical panels apart. A monitor can instead be pinned to an explicit image, which wins over every row above. Those choices live in `wallpapers.json` at the root of your image folder, keyed on the monitor's device interface path:
 
 ```powershell
-Import-Module .\WallpaperByResolution\WallpaperByResolution.psd1
+Import-Module .\Screen4Screen\Screen4Screen.psd1
 $d = @(Get-AttachedDisplay)[0]
 Set-WallpaperAssignment -Root 'D:\Wallpapers' -DevicePath $d.DevicePath -Image 'D:\Wallpapers\left.webp' -Friendly $d.Friendly
 Remove-WallpaperAssignment -Root 'D:\Wallpapers' -DevicePath $d.DevicePath   # back to automatic
@@ -54,10 +56,10 @@ Reduced ratios for common panels:
 
 ## The graphical manager
 
-Double-click `WallpaperGui.cmd`, or run:
+Double-click `screen4screen.cmd`, or run:
 
 ```powershell
-.\Set-WallpaperByResolution.ps1 -Gui
+.\screen4screen.ps1 -Gui
 ```
 
 One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single switch. It refreshes itself when you dock or undock.
@@ -73,20 +75,20 @@ The timing knobs (`-PollSeconds`, `-SettleDelay`) are deliberately not in the wi
 Test first. This prints what is detected and applies once:
 
 ```powershell
-.\Set-WallpaperByResolution.ps1 -Once -Verbose
+.\screen4screen.ps1 -Once -Verbose
 ```
 
 Install as a background task that starts at logon:
 
 ```powershell
-.\Set-WallpaperByResolution.ps1 -Install -WallpaperRoot 'D:\Wallpapers' -Position Fill
-Start-ScheduledTask -TaskName WallpaperByResolution
+.\screen4screen.ps1 -Install -WallpaperRoot 'D:\Wallpapers' -Position Fill
+Start-ScheduledTask -TaskName screen4screen
 ```
 
 Remove it:
 
 ```powershell
-.\Set-WallpaperByResolution.ps1 -Uninstall
+.\screen4screen.ps1 -Uninstall
 ```
 
 Parameters:
@@ -101,7 +103,7 @@ Parameters:
 | `-Install`       |                                    | register the logon task                          |
 | `-Uninstall`     |                                    | remove the logon task                            |
 
-Log file: `%LOCALAPPDATA%\WallpaperByResolution\log.txt`.
+Log file: `%LOCALAPPDATA%\screen4screen\log.txt`.
 
 ## Before you start
 
@@ -110,7 +112,7 @@ Disable Windows Spotlight and the wallpaper slideshow in *Settings > Personaliza
 If `powershell.exe` refuses to run the script, the scheduled task already passes `-ExecutionPolicy Bypass`; for a manual run use:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\Set-WallpaperByResolution.ps1 -Once
+powershell -ExecutionPolicy Bypass -File .\screen4screen.ps1 -Once
 ```
 
 ## Known limitations

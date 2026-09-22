@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Graphical manager for WallpaperByResolution.
+    Graphical manager for screen4screen.
 
 .DESCRIPTION
     A single window to pick the image folder, see what each monitor will get,
@@ -12,7 +12,7 @@
 
 .NOTES
     Machine policy may be AllSigned, so launch through:
-      powershell -ExecutionPolicy Bypass -File .\Gui\Show-WallpaperGui.ps1
+      powershell -ExecutionPolicy Bypass -File .\Gui\Show-Screen4ScreenGui.ps1
 #>
 
 [CmdletBinding()]
@@ -34,7 +34,7 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 }
 
 $moduleManifest = Join-Path (Split-Path $PSScriptRoot -Parent) `
-                            'WallpaperByResolution\WallpaperByResolution.psd1'
+                            'Screen4Screen\Screen4Screen.psd1'
 Import-Module $moduleManifest -Force -ErrorAction Stop -Verbose:$false
 
 
@@ -191,6 +191,21 @@ function Invoke-Guarded {
 # Theme
 #------------------------------------------------------------------------------
 
+function Set-WindowIcon {
+    # Drives both the title bar and the taskbar button. Missing file is not
+    # worth failing over: the window just keeps the host's default icon.
+    param([System.Windows.Window] $Target)
+
+    $path = Join-Path (Split-Path $PSScriptRoot -Parent) 'assets\screen4screen.ico'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+
+    try {
+        $image = New-Object System.Windows.Media.Imaging.BitmapImage ([Uri] $path)
+        $Target.Icon = [System.Windows.Media.ImageSource] $image
+    }
+    catch { }
+}
+
 # Both palettes are spelled out here rather than relying on the values baked
 # into the XAML: switching back to light has to restore them explicitly.
 $script:Palette = @{
@@ -200,7 +215,8 @@ $script:Palette = @{
         @('TextBrush',     '#FF1A1C1E'), @('SubtleBrush',      '#FF5A6068'),
         @('AccentBrush',   '#FFB0296A'), @('OnAccentBrush',    '#FFFFFFFF'),
         @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
-        @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD')
+        @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD'),
+        @('FabBrush',      '#FFECEEF0')
     )
     Dark = @(
         @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',     '#FF24272B'),
@@ -208,7 +224,8 @@ $script:Palette = @{
         @('TextBrush',     '#FFECEEF0'), @('SubtleBrush',      '#FFA8AFB7'),
         @('AccentBrush',   '#FFE2ABBA'), @('OnAccentBrush',    '#FF1B1D20'),
         @('ThumbBrush',    '#FF2E3236'), @('HoverBrush',       '#FF2E3236'),
-        @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057')
+        @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057'),
+        @('FabBrush',      '#FF2B3035')
     )
 }
 
@@ -262,6 +279,7 @@ function Show-AboutWindow {
     finally { $reader.Dispose() }
 
     Set-WindowPalette -Target $about -Dark $script:State.Dark
+    Set-WindowIcon    -Target $about
     $about.Owner = $window
 
     $close = $about.FindName('BtnClose')
@@ -401,13 +419,13 @@ function Update-AutoState {
 function Set-AutoMode {
     param([bool] $Enabled)
 
-    $launcher = Join-Path (Split-Path $PSScriptRoot -Parent) 'Set-WallpaperByResolution.ps1'
+    $launcher = Join-Path (Split-Path $PSScriptRoot -Parent) 'screen4screen.ps1'
 
     if ($Enabled) {
         Install-WallpaperTask -Root $script:State.Root `
                               -PositionName $script:State.Position `
                               -LauncherPath $launcher
-        try { Start-ScheduledTask -TaskName 'WallpaperByResolution' -ErrorAction Stop } catch { }
+        try { Start-ScheduledTask -TaskName 'screen4screen' -ErrorAction Stop } catch { }
     }
     else {
         Uninstall-WallpaperTask
@@ -543,6 +561,7 @@ function Invoke-Tick {
 #------------------------------------------------------------------------------
 
 Import-GuiSetting
+Set-WindowIcon -Target $window
 Set-Theme -Dark $script:State.Dark
 
 $ui.TxtRoot.Text = $script:State.Root

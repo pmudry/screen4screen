@@ -2,14 +2,14 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Ce que fait ce programme"
-        Width="640" Height="660" MinWidth="520" MinHeight="420"
+        Width="560" Height="520" MinWidth="460" MinHeight="380"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontFamily="Segoe UI" FontSize="13"
         UseLayoutRounding="True"
         Background="{DynamicResource WindowBrush}">
 
   <Window.Resources>
-    <!-- Light values; Show-WallpaperGui.ps1 swaps them to match the main
+    <!-- Light values; Show-Screen4ScreenGui.ps1 swaps them to match the main
          window's current theme before this one is shown. -->
     <SolidColorBrush x:Key="WindowBrush"      Color="#FFFFFF"/>
     <SolidColorBrush x:Key="SurfaceBrush"     Color="#F5F6F7"/>
@@ -52,7 +52,8 @@
     </Style>
 
     <Style TargetType="Button">
-      <Setter Property="Padding" Value="20,8"/>
+      <Setter Property="Padding" Value="26,9"/>
+      <Setter Property="MinHeight" Value="38"/>
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -60,7 +61,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}">
+            <Border x:Name="Bd" CornerRadius="19" Background="{TemplateBinding Background}">
               <ContentPresenter Margin="{TemplateBinding Padding}"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
@@ -140,53 +141,28 @@
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,20,24,0">
       <StackPanel>
 
-        <TextBlock Text="Fonds d'écran par écran" FontSize="19" FontWeight="SemiBold"/>
+        <TextBlock Text="screen4screen" FontSize="20" FontWeight="SemiBold"/>
         <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource SubtleBrush}"
-                   Text="Chaque écran reçoit une image faite pour sa résolution, au lieu d'une seule image étirée ou recadrée sur tous. Quand vous branchez, débranchez ou changez d'écran, les fonds se remettent en place."/>
+                   Text="Chaque écran reçoit une image faite pour sa résolution, et les fonds se remettent en place quand vous changez d'écran."/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Comment il choisit l'image"/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Il lit la résolution réelle de chaque écran, en pixels, indépendamment du facteur d'agrandissement de Windows. Il cherche ensuite dans votre dossier d'images un fichier au nom de cette résolution (par exemple 3840x2160), sinon un fichier au nom du format de l'écran (ratio-16x9), sinon un fichier nommé default. Vous pouvez aussi imposer une image précise à un écran donné."/>
-
-        <TextBlock Style="{StaticResource H2}" Text="Ce qu'il modifie sur votre ordinateur"/>
-
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Votre fond d'écran, par l'interface prévue par Windows pour ça. Rien d'autre n'est touché dans vos réglages d'affichage."/>
-
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Si vous activez le changement automatique : une tâche planifiée nommée WallpaperByResolution, qui démarre à votre ouverture de session. Elle tourne sous votre compte, sans droits administrateur, et vérifie vos écrans toutes les trois secondes. La désactiver la supprime complètement."/>
-
-        <TextBlock Style="{StaticResource Item}" Text="Un journal de ce qu'il fait :"/>
-        <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\WallpaperByResolution\log.txt"/>
-
-        <TextBlock Style="{StaticResource Item}" Margin="0,12,0,0"
-                   Text="Les réglages de cette fenêtre, à côté du journal :"/>
-        <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\WallpaperByResolution\gui-settings.json"/>
-
-        <TextBlock Style="{StaticResource Item}" Margin="0,12,0,0"
-                   Text="Les images que vous imposez à un écran, dans votre dossier d'images :"/>
-        <TextBlock Style="{StaticResource Path2}" Text="wallpapers.json"/>
+        <TextBlock Style="{StaticResource H2}" Text="Ce qu'il modifie"/>
+        <TextBlock Style="{StaticResource Item}" Text="Votre fond d'écran, et rien d'autre dans vos réglages d'affichage."/>
+        <TextBlock Style="{StaticResource Item}" Text="Avec le changement automatique activé : une tâche planifiée nommée screen4screen, lancée à votre ouverture de session, sous votre compte et sans droits administrateur. La désactiver la supprime."/>
+        <TextBlock Style="{StaticResource Item}" Text="Trois fichiers, tous supprimables :"/>
+        <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\screen4screen\log.txt"/>
+        <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\screen4screen\gui-settings.json"/>
+        <TextBlock Style="{StaticResource Path2}" Text="wallpapers.json, dans votre dossier d'images"/>
 
         <TextBlock Style="{StaticResource H2}" Text="Ce qu'il ne fait pas"/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Aucune connexion à Internet, aucune donnée envoyée où que ce soit."/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Vos images ne sont jamais modifiées, déplacées ni supprimées : elles sont seulement lues."/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Aucun droit administrateur n'est demandé, et rien n'est écrit en dehors de votre compte utilisateur."/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Aucun programme n'est installé : tout tient dans les fichiers du dossier d'où vous l'avez lancé."/>
+        <TextBlock Style="{StaticResource Item}" Text="Aucune connexion à Internet, aucune donnée envoyée."/>
+        <TextBlock Style="{StaticResource Item}" Text="Vos images sont seulement lues, jamais modifiées ni déplacées."/>
+        <TextBlock Style="{StaticResource Item}" Text="Rien n'est installé, et rien n'est écrit hors de votre compte."/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Si vos fonds d'écran reviennent tout seuls"/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="C'est en général Windows Spotlight ou le diaporama de fonds d'écran, qui remettent leurs propres images. Désactivez-les dans Paramètres, Personnalisation, Arrière-plan."/>
+        <TextBlock Style="{StaticResource H2}" Text="Si les fonds reviennent tout seuls"/>
+        <TextBlock Style="{StaticResource Item}" Text="Désactivez Windows Spotlight et le diaporama dans Paramètres, Personnalisation, Arrière-plan."/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Pour tout retirer"/>
-        <TextBlock Style="{StaticResource Item}"
-                   Text="Désactivez le changement automatique, puis supprimez le dossier du programme. Vous pouvez aussi effacer le dossier WallpaperByResolution dans %LOCALAPPDATA% pour le journal et les réglages."/>
-
-        <TextBlock Margin="0,20,0,0" Foreground="{DynamicResource SubtleBrush}" FontSize="12"
-                   Text="github.com/pmudry/wallpaper-by-resolution"/>
+        <TextBlock Margin="0,18,0,0" Foreground="{DynamicResource SubtleBrush}" FontSize="12"
+                   Text="github.com/pmudry/screen4screen"/>
 
       </StackPanel>
     </ScrollViewer>
