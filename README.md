@@ -15,17 +15,31 @@ No dependencies. One PowerShell script, Windows 8 or later.
 
 ## Image naming
 
-Put your images in one folder (default `%USERPROFILE%\Pictures\Wallpapers`). For a given monitor the script tries, in order:
+Put your images in one folder (default `%USERPROFILE%\Pictures\Wallpapers`). For a given monitor the script tries, in order. Note that for each name a **folder is tried before a file**:
 
 | Priority | Name                    | Meaning                                      |
 |----------|-------------------------|----------------------------------------------|
-| 1        | `1920x1200.jpg`         | exact resolution                             |
-| 2        | `1920x1200\`            | folder: random image from it                 |
-| 3        | `ratio-8x5.jpg`         | reduced aspect ratio                         |
-| 4        | `ratio-8x5\`            | folder: random image from it                 |
-| 5        | `default.jpg`           | fallback                                     |
+| 1        | `1920x1200\`            | folder: random image from it                 |
+| 2        | `1920x1200.jpg`         | exact resolution                             |
+| 3        | `ratio-8x5\`            | folder: random image from it                 |
+| 4        | `ratio-8x5.jpg`         | reduced aspect ratio                         |
+| 5        | `default\`              | folder: random image from it                 |
+| 6        | `default.jpg`           | fallback                                     |
 
 Extensions: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp`.
+
+### Pinning one image to one monitor
+
+The table above keys off resolution, which cannot tell two identical panels apart. A monitor can instead be pinned to an explicit image, which wins over every row above. Those choices live in `wallpapers.json` at the root of your image folder, keyed on the monitor's device interface path:
+
+```powershell
+Import-Module .\WallpaperByResolution\WallpaperByResolution.psd1
+$d = @(Get-AttachedDisplay)[0]
+Set-WallpaperAssignment -Root 'D:\Wallpapers' -DevicePath $d.DevicePath -Image 'D:\Wallpapers\left.webp' -Friendly $d.Friendly
+Remove-WallpaperAssignment -Root 'D:\Wallpapers' -DevicePath $d.DevicePath   # back to automatic
+```
+
+Assignments for monitors that are currently unplugged are kept, not discarded, and reconnect silently when the monitor comes back.
 
 Reduced ratios for common panels:
 

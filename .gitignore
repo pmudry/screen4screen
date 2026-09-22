@@ -5,6 +5,9 @@ examples/wallpapers/*
 !examples/wallpapers/ratio-16x9.webp
 !examples/wallpapers/default.webp
 
+# Per-user manual monitor assignments, written next to the images
+wallpapers.json
+
 # PowerShell / editor leftovers
 *.log
 *.swp

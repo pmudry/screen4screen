@@ -4,12 +4,19 @@ Working notes for this repository. Read before changing anything.
 
 ## What this is
 
-A single-file PowerShell tool that sets a different wallpaper on each monitor
+A PowerShell tool that sets a different wallpaper on each monitor
 based on the monitor's native resolution, and re-applies on display topology
 changes (dock / undock / external screen). Windows 8+, Windows PowerShell 5.1
 and PowerShell 7 both targeted.
 
-Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
+Layout:
+
+- `WallpaperByResolution/` - the module (`.psm1` + manifest). All the logic
+  and the embedded C# live here.
+- `Set-WallpaperByResolution.ps1` - thin CLI wrapper at the repo root. Its
+  parameter block and comment-based help are the documented surface; keep
+  them in step with README.md.
+- `examples/wallpapers/` - three ISC sample backgrounds, named for the lookup.
 
 ## Design decisions, do not undo without a reason
 
@@ -43,6 +50,16 @@ Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
   zero displays until it was tracked down. Use `[NullString]::Value`; the two
   call sites (adapter enumeration, and the all-monitors `SetWallpaper`) are
   commented in place.
+- **Preference variables do not cross into the module.** `-Once` used to set
+  `$VerbosePreference = 'Continue'` in script scope and `Write-Log` picked it
+  up. Once the logic moved into a module, a module function's scope chain is
+  local -> module -> global and skips the calling script entirely, so the
+  per-monitor log lines vanished. The wrapper now passes `-Verbose` explicitly
+  to the module functions. Do not replace that with a preference assignment.
+- **`Add-Type` types never unload.** `Remove-Module` and `Import-Module -Force`
+  keep the old `WallByRes` assembly in the AppDomain. Editing the embedded C#
+  requires a fresh PowerShell process; the `-as [type]` guard in
+  `Initialize-NativeType` exists so a re-import does not throw.
 - **All `IDesktopWallpaper` calls live in the C# `Wallpaper` helper class.**
   PowerShell cannot drive the interface itself: `New-Object` plus a cast to a
   `[ComImport]` interface does not issue the QueryInterface, and an object
@@ -52,8 +69,10 @@ Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
 
 ## Conventions
 
-- ASCII only inside the script (comment-based help included) so it behaves
-  identically whether the file is read as UTF-8 or ANSI by PowerShell 5.1.
+- ASCII only inside `.ps1`/`.psm1`/`.psd1` (comment-based help included) so
+  they behave identically whether read as UTF-8 or ANSI by PowerShell 5.1.
+  `.xaml` is exempt: XML declares its own encoding, so the GUI's French
+  strings are safe there. Keep every user-facing string in the XAML.
 - `Set-StrictMode -Version Latest` is on. Keep it on.
 - Functions are `Verb-Noun` with approved verbs.
 - Log through `Write-Log`; never let logging throw.
@@ -62,19 +81,22 @@ Entry point: `Set-WallpaperByResolution.ps1`. Everything lives there for now.
 
 ## Roadmap (rough priority order)
 
-1. Split into a module (`WallpaperByResolution.psm1` + manifest), keep the
-   `.ps1` as a thin CLI wrapper. Enables Pester tests on
-   `Resolve-WallpaperFile` and `Get-AttachedDisplay` (mock the P/Invoke layer).
-2. Pester tests for the naming/fallback logic.
-3. Optional JSON config (`wallpapers.json`) mapping a monitor's friendly name
-   or device path to an explicit image, overriding the resolution lookup.
-   Useful when two monitors share a resolution.
+1. ~~Split into a module.~~ Done.
+2. Pester tests for the naming/fallback logic. `Resolve-WallpaperFile` is now
+   a thin wrapper over the private `Resolve-WallpaperCandidate`, which returns
+   both the path and which candidate matched, so both are testable. Mock
+   `Get-Random` or the folder branch is non-deterministic.
+3. ~~`wallpapers.json` pinning an image to a monitor.~~ Done. Keyed on device
+   interface path only: the friendly name cannot tell two identical panels
+   apart, which was the whole point. Stored in the image folder, with the
+   image path relative when it lives inside that folder.
 4. Console-flash-free launcher for the scheduled task (`conhost --headless`
    on Windows 11, or a tiny `.vbs` shim for older builds).
 5. Optional event-driven trigger: hidden `NativeWindow` catching
    `WM_DISPLAYCHANGE`, with polling kept as a fallback.
 6. `-WhatIf` support on `Set-WallpapersNow`.
-7. Publish to PowerShell Gallery once the module split is done.
+7. Publish to PowerShell Gallery. The module folder name already matches
+   the module name, so `Publish-Module -Path ./WallpaperByResolution` works.
 8. CI: PSScriptAnalyzer + Pester on `windows-latest`.
 
 ## Testing on a real machine
