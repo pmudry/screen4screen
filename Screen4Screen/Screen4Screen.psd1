@@ -1,6 +1,7 @@
 @{
     RootModule        = 'Screen4Screen.psm1'
-    ModuleVersion     = '1.0.0'
+    # Kept in step with the release tag: the about box shows this number.
+    ModuleVersion     = '0.5.0'
     GUID              = 'b7c4f2a1-9d3e-4c58-8f06-2a1e5d7b4c93'
     Author            = 'Pierre-Andre Mudry'
     Description       = 'Per-monitor Windows wallpapers, chosen from each monitor native resolution.'
