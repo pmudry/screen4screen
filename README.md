@@ -125,7 +125,7 @@ powershell -ExecutionPolicy Bypass -File .\screen4screen.ps1 -Once
 
 ## Known limitations
 
-- Polling, not event-driven. Reaction time is `PollSeconds + SettleDelay`, a few seconds. `WM_DISPLAYCHANGE` would be instant but needs a message pump, which a headless PowerShell process does not have without extra machinery.
+- Reaction is event-driven: a hidden window catches `WM_DISPLAYCHANGE` and the watcher wakes immediately, then waits `SettleDelay` for Windows to finish rearranging. `PollSeconds` (default 15) is only a fallback for the case where that window cannot be created.
 - The `-Position` mode is global; Windows does not expose per-monitor fit.
 - `powershell.exe -WindowStyle Hidden` may flash a console window for a fraction of a second at logon. A `.vbs` or `conhost --headless` launcher avoids it; see roadmap.
 

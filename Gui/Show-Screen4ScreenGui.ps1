@@ -15,6 +15,8 @@
       powershell -ExecutionPolicy Bypass -File .\Gui\Show-Screen4ScreenGui.ps1
 #>
 
+#Requires -Version 5.1
+
 [CmdletBinding()]
 param()
 
@@ -85,6 +87,8 @@ $script:State = @{
     StableTicks  = 0
     TaskChecked  = 0
     Thumbs       = @{}
+    Notifier     = $null
+    FallbackTick = 0
     Rows         = $null
     Loaded       = $false
     Dark         = $false
@@ -555,9 +559,18 @@ function Start-DeferredLoad {
 }
 
 function Invoke-Tick {
-    # Cheap: a handful of EnumDisplayDevices calls. Kept on the UI thread on
-    # purpose; a worker runspace would be MTA and every IDesktopWallpaper call
-    # would cross an apartment boundary.
+    # Enumerating the adapters costs about 50 ms, far too much to spend on
+    # every beat. Ask the notifier instead, which is a zero-timeout wait on an
+    # event handle, and only enumerate when Windows actually said something.
+    # A slow full check still runs as a safety net in case the window sink
+    # could not be created.
+    $script:State.FallbackTick++
+    $forced = ($script:State.FallbackTick % 15) -eq 0
+
+    if ($script:State.Notifier) {
+        if (-not $script:State.Notifier.Wait(0) -and -not $forced) { return }
+    }
+
     $signature = Get-DisplaySignature
 
     if ($signature -eq $script:State.Signature) {
@@ -689,11 +702,14 @@ $ui.LstDisplays.AddHandler(
     [System.Windows.RoutedEventHandler] { Invoke-Guarded { Invoke-RowCommand -EventArgs $args[1] } })
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromSeconds(2)
+$timer.Interval = [TimeSpan]::FromSeconds(1)
 $timer.Add_Tick({ Invoke-Guarded { Invoke-Tick } })
 
 $window.Add_Loaded({
     Invoke-Guarded {
+        try   { $script:State.Notifier = New-Object WallByRes.DisplayNotifier }
+        catch { $script:State.Notifier = $null }   # fall back to polling
+
         $script:State.Signature = Get-DisplaySignature
         Update-DisplayList -SkipThumbnails
         $script:State.Loaded = $true
@@ -702,6 +718,9 @@ $window.Add_Loaded({
     }
 })
 
-$window.Add_Closed({ $timer.Stop() })
+$window.Add_Closed({
+    $timer.Stop()
+    if ($script:State.Notifier) { $script:State.Notifier.Dispose() }
+})
 
 $window.ShowDialog() | Out-Null

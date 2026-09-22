@@ -14,6 +14,32 @@ Set-StrictMode -Version Latest
 
 
 #------------------------------------------------------------------------------
+# Host and platform requirements
+#------------------------------------------------------------------------------
+
+# Checked here rather than left to fail somewhere in the interop layer, since
+# this ships to other machines. Windows PowerShell 5.1 and PowerShell 7 are
+# both supported; 5.1 is what the scheduled task uses, because it is the one
+# present on every Windows install.
+if ($PSVersionTable.PSVersion -lt [Version]'5.1') {
+    throw ("screen4screen needs Windows PowerShell 5.1 or PowerShell 7. This host is {0}." -f
+           $PSVersionTable.PSVersion)
+}
+
+# $IsWindows only exists on PowerShell 6+, and reading it under StrictMode on
+# 5.1 would throw, so the platform is read from the runtime instead.
+if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
+    throw 'screen4screen only runs on Windows.'
+}
+
+# IDesktopWallpaper is Windows 8 / Server 2012 and later (build 9200).
+if ([System.Environment]::OSVersion.Version -lt [Version]'6.2') {
+    throw ("screen4screen needs Windows 8 or later. This is Windows {0}." -f
+           [System.Environment]::OSVersion.Version)
+}
+
+
+#------------------------------------------------------------------------------
 # Module state
 #------------------------------------------------------------------------------
 
@@ -208,6 +234,164 @@ namespace WallByRes
     [Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD")]
     [ClassInterface(ClassInterfaceType.None)]
     public class DesktopWallpaperClass { }
+
+    // Signals when Windows reports a display change, so the watcher does not
+    // have to re-enumerate the adapters every few seconds just to find out
+    // nothing moved.
+    //
+    // This owns a real hidden top-level window and pumps it on its own thread.
+    // Two reasons it is not built on Microsoft.Win32.SystemEvents: on the .NET
+    // Framework that class listens on a message-only window, and message-only
+    // windows never receive broadcasts such as WM_DISPLAYCHANGE, so nothing
+    // ever fired from a headless Windows PowerShell host; and it is not part
+    // of .NET Core at all.
+    public class DisplayNotifier : IDisposable
+    {
+        private const int WM_DISPLAYCHANGE = 0x007E;
+        private const int WM_DESTROY       = 0x0002;
+
+        private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WNDCLASSEX
+        {
+            public uint   cbSize;
+            public uint   style;
+            public WndProcDelegate lpfnWndProc;
+            public int    cbClsExtra;
+            public int    cbWndExtra;
+            public IntPtr hInstance;
+            public IntPtr hIcon;
+            public IntPtr hCursor;
+            public IntPtr hbrBackground;
+            public string lpszMenuName;
+            public string lpszClassName;
+            public IntPtr hIconSm;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSG
+        {
+            public IntPtr hwnd;
+            public uint   message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint   time;
+            public int    ptX;
+            public int    ptY;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern ushort RegisterClassEx(ref WNDCLASSEX lpwcx);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateWindowEx(
+            int exStyle, string className, string windowName, int style,
+            int x, int y, int width, int height,
+            IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool DestroyWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetMessage(out MSG msg, IntPtr hWnd, uint min, uint max);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr DispatchMessage(ref MSG msg);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        private readonly System.Threading.ManualResetEvent _signal =
+            new System.Threading.ManualResetEvent(false);
+        private readonly System.Threading.ManualResetEvent _ready =
+            new System.Threading.ManualResetEvent(false);
+
+        // Kept in a field: if the delegate is collected the window procedure
+        // becomes a dangling pointer and the process dies on the next message.
+        private WndProcDelegate _proc;
+        private System.Threading.Thread _thread;
+        private IntPtr _hwnd;
+        private bool _disposed;
+
+        public DisplayNotifier()
+        {
+            _proc = new WndProcDelegate(WndProc);
+
+            _thread = new System.Threading.Thread(new System.Threading.ThreadStart(Pump));
+            _thread.IsBackground = true;
+            _thread.Start();
+
+            if (!_ready.WaitOne(5000))
+            {
+                throw new InvalidOperationException("The display notifier window did not start.");
+            }
+        }
+
+        private void Pump()
+        {
+            string className = "screen4screen_display_" + Guid.NewGuid().ToString("N");
+
+            WNDCLASSEX wc = new WNDCLASSEX();
+            wc.cbSize        = (uint) Marshal.SizeOf(typeof(WNDCLASSEX));
+            wc.lpfnWndProc   = _proc;
+            wc.lpszClassName = className;
+
+            if (RegisterClassEx(ref wc) == 0)
+            {
+                _ready.Set();
+                return;
+            }
+
+            // A real top-level window, deliberately: HWND_MESSAGE windows are
+            // excluded from broadcasts, and WM_DISPLAYCHANGE is a broadcast.
+            // It is never shown, so it costs nothing on screen.
+            _hwnd = CreateWindowEx(0, className, "screen4screen", 0,
+                                   0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+
+            _ready.Set();
+            if (_hwnd == IntPtr.Zero) { return; }
+
+            MSG msg;
+            while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                DispatchMessage(ref msg);
+            }
+        }
+
+        private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+        {
+            if (msg == WM_DISPLAYCHANGE) { _signal.Set(); }
+            return DefWindowProc(hWnd, msg, wParam, lParam);
+        }
+
+        // Blocks up to timeoutMs. True means a change was signalled; the
+        // signal is cleared either way so the next call starts fresh.
+        public bool Wait(int timeoutMs)
+        {
+            bool signalled = _signal.WaitOne(timeoutMs);
+            _signal.Reset();
+            return signalled;
+        }
+
+        public bool Started { get { return _hwnd != IntPtr.Zero; } }
+
+        public void Dispose()
+        {
+            if (_disposed) { return; }
+            _disposed = true;
+
+            if (_hwnd != IntPtr.Zero)
+            {
+                PostMessage(_hwnd, WM_DESTROY, IntPtr.Zero, IntPtr.Zero);
+                DestroyWindow(_hwnd);
+                _hwnd = IntPtr.Zero;
+            }
+        }
+    }
 
     // Every IDesktopWallpaper call goes through here. PowerShell cannot call
     // the interface itself: the object comes back as System.__ComObject and,
@@ -830,14 +1014,23 @@ function Start-WallpaperWatch {
         [Parameter(Mandatory = $true)]
         [ValidateSet('Center', 'Tile', 'Stretch', 'Fit', 'Fill', 'Span')]
         [string] $PositionName,
-        [ValidateRange(1, 300)][int]    $PollSeconds = 3,
+        [ValidateRange(1, 300)][int]    $PollSeconds = 15,
         [ValidateRange(0, 30)][double]  $SettleDelay = 2.0
     )
 
-    Write-Log ("Starting. Images: {0} | Position: {1} | Poll: {2}s" -f $Root, $PositionName, $PollSeconds)
+    # Event first, polling only as a safety net. Enumerating the adapters
+    # costs about 50 ms, which is not free every few seconds on a laptop.
+    $notifier = $null
+    try   { $notifier = New-Object WallByRes.DisplayNotifier }
+    catch { Write-Log "Display events unavailable, polling only: $($_.Exception.Message)" 'WARN' }
+
+    Write-Log ("Starting. Images: {0} | Position: {1} | {2}" -f $Root, $PositionName,
+               $(if ($notifier) { "event-driven, {0}s fallback poll" -f $PollSeconds }
+                 else            { "polling every {0}s" -f $PollSeconds }))
 
     $lastSignature = $null
 
+    try {
     while ($true) {
         try {
             $signature = Get-DisplaySignature
@@ -867,7 +1060,14 @@ function Start-WallpaperWatch {
             Start-Sleep -Seconds 10
         }
 
-        Start-Sleep -Seconds $PollSeconds
+        # Wakes the instant Windows reports a change, and otherwise after the
+        # fallback interval.
+        if ($notifier) { [void] $notifier.Wait($PollSeconds * 1000) }
+        else           { Start-Sleep -Seconds $PollSeconds }
+    }
+    }
+    finally {
+        if ($notifier) { $notifier.Dispose() }
     }
 }
 

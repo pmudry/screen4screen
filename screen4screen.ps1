@@ -57,7 +57,9 @@
     Removes the scheduled task.
 
 .PARAMETER PollSeconds
-    Polling interval for the display configuration. Default: 3.
+    Fallback interval for re-checking the displays. Changes are normally
+    picked up instantly from the WM_DISPLAYCHANGE message, so this only
+    matters if that mechanism is unavailable. Default: 15.
 
 .PARAMETER SettleDelay
     Delay after a change is detected, giving Windows time to settle the new
@@ -77,6 +79,8 @@
     own images back.
 #>
 
+#Requires -Version 5.1
+
 [CmdletBinding()]
 param(
     [string] $WallpaperRoot = (Join-Path $env:USERPROFILE 'Pictures\Wallpapers'),
@@ -90,7 +94,7 @@ param(
     [switch] $Uninstall,
 
     [ValidateRange(1, 300)]
-    [int] $PollSeconds = 3,
+    [int] $PollSeconds = 15,
 
     [ValidateRange(0, 30)]
     [double] $SettleDelay = 2.0

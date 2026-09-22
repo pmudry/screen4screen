@@ -229,7 +229,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" CornerRadius="18"
+            <Border x:Name="Bd" CornerRadius="6"
                     Background="{DynamicResource FieldBrush}"
                     BorderBrush="{DynamicResource BorderBrush2}"
                     BorderThickness="1">
@@ -268,10 +268,10 @@
                                 ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                 Margin="15,0,32,0" VerticalAlignment="Center"/>
               <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
-                     AllowsTransparency="True" PopupAnimation="Fade"
+                     VerticalOffset="4" AllowsTransparency="True" PopupAnimation="Fade"
                      IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
-                <Border Margin="0,4,0,0" CornerRadius="4"
-                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                <Border CornerRadius="6" Padding="0,4"
+                        Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                         MaxHeight="{TemplateBinding MaxDropDownHeight}"
                         Background="{DynamicResource SurfaceBrush}"
                         BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">

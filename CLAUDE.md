@@ -42,9 +42,20 @@ Layout:
 - **Two passes after a change**, separated by ~3 s. Windows restores its own
   transcoded wallpaper cache shortly after a topology change and the first
   pass is often overwritten.
-- **Polling loop, not `SystemEvents.DisplaySettingsChanged`.** The event
-  needs a message pump and is unreliable from a headless PowerShell process.
-  Polling `EnumDisplayDevices` every 3 s costs nothing measurable.
+- **Event-driven via our own hidden window, polling only as a fallback.**
+  `WallByRes.DisplayNotifier` creates a real top-level window on its own
+  thread, pumps it, and signals on `WM_DISPLAYCHANGE`. Two things were
+  measured rather than assumed. `Microsoft.Win32.SystemEvents` does not work
+  here: on the .NET Framework it listens on a message-only window, and
+  message-only windows are excluded from broadcasts, so a broadcast
+  `WM_DISPLAYCHANGE` never reached it from Windows PowerShell (it did reach
+  PowerShell 7, which uses a different implementation). And the window must
+  stay top-level for the same reason; do not "tidy" it into `HWND_MESSAGE`.
+  Enumerating the adapters costs about 50 ms, too much to spend every 3 s on
+  a laptop, so the fallback poll now defaults to 15 s.
+- **The `WndProcDelegate` is held in a field.** If it is collected the window
+  procedure becomes a dangling pointer and the process dies on the next
+  message.
 - C# is embedded via `Add-Type` and must stay **C# 5 compatible** (no
   expression-bodied members, no string interpolation, no `nameof`) so it
   compiles under Windows PowerShell 5.1's built-in compiler.
@@ -110,6 +121,14 @@ Layout:
   wallpaper, the logon task, the log, the two JSON files, and what it does not
   do. Keep it truthful if any of that changes.
 
+## Supported hosts
+
+Windows PowerShell 5.1 and PowerShell 7, on Windows 8 or later. The module
+checks all three at import and throws a plain message rather than failing
+later inside the interop layer; the entry scripts carry `#Requires -Version
+5.1`. The scheduled task always runs Windows PowerShell, because it is the
+one present on every install.
+
 ## Conventions
 
 - ASCII only inside `.ps1`/`.psm1`/`.psd1` (comment-based help included) so
@@ -139,8 +158,8 @@ Layout:
    `conhost --headless`. A `.vbs` shim was considered and rejected: Windows
    Script Host is disabled on many managed machines. Builds older than 22621
    fall back to the plain host and keep the flash.
-5. Optional event-driven trigger: hidden `NativeWindow` catching
-   `WM_DISPLAYCHANGE`, with polling kept as a fallback.
+5. ~~Event-driven trigger catching `WM_DISPLAYCHANGE`.~~ Done, for both the
+   watcher and the window.
 6. `-WhatIf` support on `Set-WallpapersNow`.
 7. Publish to PowerShell Gallery. The module folder name already matches
    the module name, so `Publish-Module -Path ./screen4screen` works.
