@@ -45,8 +45,11 @@
     <!-- Light values. Show-Screen4ScreenGui.ps1 replaces every one of these when
          Windows is in dark mode, which is why nothing below uses
          StaticResource for a colour: only DynamicResource re-resolves. -->
-    <SolidColorBrush x:Key="WindowBrush"      Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="SurfaceBrush"     Color="#F5F6F7"/>
+    <!-- The page is faintly grey and every surface on it is white. With
+         both white, the drop-down was indistinguishable from the window
+         behind it and looked like it had no background at all. -->
+    <SolidColorBrush x:Key="WindowBrush"      Color="#F3F4F6"/>
+    <SolidColorBrush x:Key="SurfaceBrush"     Color="#FFFFFF"/>
     <SolidColorBrush x:Key="FieldBrush"       Color="#FFFFFF"/>
     <SolidColorBrush x:Key="BorderBrush2"     Color="#D9DCE0"/>
     <SolidColorBrush x:Key="TextBrush"        Color="#1A1C1E"/>
@@ -54,8 +57,8 @@
     <SolidColorBrush x:Key="AccentBrush"      Color="#B0296A"/>
     <SolidColorBrush x:Key="OnAccentBrush"    Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ThumbBrush"       Color="#E8EAEC"/>
-    <SolidColorBrush x:Key="HoverBrush"       Color="#E8EAEC"/>
-    <SolidColorBrush x:Key="PressedBrush"     Color="#DCDFE3"/>
+    <SolidColorBrush x:Key="HoverBrush"       Color="#EBEDEF"/>
+    <SolidColorBrush x:Key="PressedBrush"     Color="#DFE2E6"/>
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4C8CD"/>
     <SolidColorBrush x:Key="FabBrush"         Color="#FFFFFF"/>
     <SolidColorBrush x:Key="FabEdgeBrush"     Color="#D9DCE0"/>
@@ -418,7 +421,9 @@
 
           <!-- Fixed 150x54 slot so every row lines up, with the preview
                itself drawn at the screen's own proportions inside it. -->
-          <Grid Grid.Column="0" Width="150" Height="54" VerticalAlignment="Top">
+          <!-- Centred vertically: the action button sits under the text, so a
+               top-aligned preview reads as misaligned against the card. -->
+          <Grid Grid.Column="0" Width="150" Height="54" VerticalAlignment="Center">
             <Border Width="{Binding ThumbWidth}" Height="{Binding ThumbHeight}"
                     CornerRadius="3" HorizontalAlignment="Center" VerticalAlignment="Center"
                     Background="{DynamicResource ThumbBrush}" ClipToBounds="True">

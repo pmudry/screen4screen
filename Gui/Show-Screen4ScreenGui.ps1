@@ -260,12 +260,12 @@ function Set-WindowIcon {
 # into the XAML: switching back to light has to restore them explicitly.
 $script:Palette = @{
     Light = @(
-        @('WindowBrush',   '#FFFFFFFF'), @('SurfaceBrush',     '#FFF5F6F7'),
+        @('WindowBrush',   '#FFF3F4F6'), @('SurfaceBrush',     '#FFFFFFFF'),
         @('FieldBrush',    '#FFFFFFFF'), @('BorderBrush2',     '#FFD9DCE0'),
         @('TextBrush',     '#FF1A1C1E'), @('SubtleBrush',      '#FF5A6068'),
         @('AccentBrush',   '#FFB0296A'), @('OnAccentBrush',    '#FFFFFFFF'),
-        @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
-        @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD'),
+        @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFEBEDEF'),
+        @('PressedBrush',  '#FFDFE2E6'), @('ScrollThumbBrush', '#FFC4C8CD'),
         @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#FFD9DCE0'),
         @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FFFFFFFF'),
         @('PopupEdgeBrush',  '#FFAEB4BC')
