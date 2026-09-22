@@ -651,13 +651,6 @@
                   ToolTip="{DynamicResource S_AutoToggleTip}"/>
         <TextBlock x:Name="TxtAutoState" Style="{StaticResource Subtle}"
                    Margin="52,6,0,0" TextWrapping="Wrap"/>
-        <!-- Only worth showing while the task exists. Windows offers no way
-             to open the Task Scheduler on a particular task, so this just
-             opens it; ours sits in the root folder under its own name. -->
-        <Button x:Name="BtnTask" Style="{StaticResource LinkButton}"
-                HorizontalAlignment="Left" Margin="48,4,0,0" Visibility="Collapsed"
-                Content="{DynamicResource S_ShowTaskLabel}"
-                ToolTip="{DynamicResource S_ShowTaskTip}"/>
       </StackPanel>
     </Border>
 
@@ -667,6 +660,14 @@
       <Button DockPanel.Dock="Right" x:Name="BtnLog" Content="{DynamicResource S_LogLabel}"
               Style="{StaticResource LinkButton}" Margin="0,0,10,0"
               ToolTip="{DynamicResource S_LogTip}"/>
+      <!-- Declared after the log link, so it lands to its left: a DockPanel
+           gives the first right-docked child the rightmost slot. Hidden while
+           there is no task to show. Windows offers no way to open the Task
+           Scheduler on a particular task, so this just opens it; ours sits in
+           the root folder under its own name. -->
+      <Button DockPanel.Dock="Right" x:Name="BtnTask" Content="{DynamicResource S_ShowTaskLabel}"
+              Style="{StaticResource LinkButton}" Margin="0,0,10,0" Visibility="Collapsed"
+              ToolTip="{DynamicResource S_ShowTaskTip}"/>
       <TextBlock x:Name="TxtStatus" VerticalAlignment="Center"
                  Style="{StaticResource Subtle}" TextTrimming="CharacterEllipsis"/>
     </DockPanel>
