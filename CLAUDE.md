@@ -142,6 +142,31 @@ later inside the interop layer; the entry scripts carry `#Requires -Version
 5.1`. The scheduled task always runs Windows PowerShell, because it is the
 one present on every install.
 
+## GUI traps found the hard way
+
+- **`$args` inside a block handed to `Invoke-Guarded` is empty.** The block
+  is invoked with no arguments, so `$args[1]` there indexes nothing. Read
+  the event in the handler itself and pass it through `$script:State`. The
+  row buttons never worked because of this.
+- **Never use `.GetNewClosure()` in this window.** A closure gets its own
+  script scope, so `$script:Ui` resolves to `$null` inside it and every
+  control access throws.
+- **WinForms dialogs need an owner.** Shown from the WPF window without
+  one, they open behind it and never take focus, so the button looks dead.
+  `Get-DialogOwner` wraps the window handle.
+- **The icon must carry BMP frames, not PNG-compressed ones.**
+  `System.Drawing.Icon` on the .NET Framework cannot decode PNG frames and
+  renders them as noise, which is what the splash showed. Pillow writes PNG
+  frames by default, so `assets/screen4screen.ico` is assembled by hand:
+  BMP up to 64 px, PNG only for the 256 px frame, which is 50 KB instead of
+  380 KB.
+- **The taskbar groups by application id.** Without
+  `SetCurrentProcessExplicitAppUserModelID` the button shows the PowerShell
+  icon no matter what the window's own icon is.
+- `screen4screen.exe` embeds the icon, so changing `assets/screen4screen.ico`
+  or `build/Launcher.cs` needs a rebuild. Nothing else does: the window and
+  the module are read at launch. `Build-Launcher.ps1` checks and says so.
+
 ## Conventions
 
 - ASCII only inside `.ps1`/`.psm1`/`.psd1` (comment-based help included) so

@@ -35,6 +35,18 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
     throw 'This window needs an STA host. Start it with: powershell -STA -File ...'
 }
 
+# The taskbar groups windows by application id, which defaults to the host
+# process, so the button showed the PowerShell icon however the window was
+# painted. Claiming an id of our own makes it a separate app and the taskbar
+# then uses the window icon. Must happen before any window exists.
+if (-not ('WallByResGui.Shell' -as [type])) {
+    Add-Type -Namespace WallByResGui -Name Shell -MemberDefinition @'
+[DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+public static extern void SetCurrentProcessExplicitAppUserModelID(string appId);
+'@
+}
+try { [WallByResGui.Shell]::SetCurrentProcessExplicitAppUserModelID('mui.screen4screen') } catch { }
+
 $moduleManifest = Join-Path (Split-Path $PSScriptRoot -Parent) `
                             'Screen4Screen\Screen4Screen.psd1'
 Import-Module $moduleManifest -Force -ErrorAction Stop -Verbose:$false
@@ -95,6 +107,7 @@ $script:State = @{
     Pool         = $null
     Jobs         = @()
     WantAuto     = $false
+    RowEvent     = $null
     DrainTimer   = $null
     Notifier     = $null
     Deferred     = $null
@@ -222,6 +235,16 @@ function Write-GuiLog {
         Add-Content -LiteralPath $path -Value $line -Encoding UTF8
     }
     catch { }   # logging must never break the window
+}
+
+function Get-DialogOwner {
+    # WinForms dialogs shown from a WPF window with no owner open behind it and
+    # never take focus, so the click looks like it did nothing. Wrapping the
+    # WPF handle gives them a proper owner.
+    $helper = New-Object System.Windows.Interop.WindowInteropHelper $window
+    $owner  = New-Object System.Windows.Forms.NativeWindow
+    $owner.AssignHandle($helper.Handle)
+    return $owner
 }
 
 function Invoke-Guarded {
@@ -649,8 +672,11 @@ function Select-RowImage {
         $dialog.InitialDirectory = $script:State.Root
     }
 
-    if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    $owner = Get-DialogOwner
+    try   { $result = $dialog.ShowDialog($owner) }
+    finally { $owner.ReleaseHandle() }
 
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return }
     if (-not $Row.DevicePath) { return }
 
     Set-WallpaperAssignment -Root $script:State.Root `
@@ -776,7 +802,11 @@ $ui.BtnBrowse.Add_Click({
         if ($script:State.Root -and (Test-Path -LiteralPath $script:State.Root)) {
             $dialog.SelectedPath = $script:State.Root
         }
-        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $owner = Get-DialogOwner
+        try   { $result = $dialog.ShowDialog($owner) }
+        finally { $owner.ReleaseHandle() }
+
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
             $script:Ui.TxtRoot.Text = $dialog.SelectedPath
         }
     }
@@ -872,7 +902,13 @@ $ui.TglAuto.Add_Click({
 # does not leak handlers.
 $ui.LstDisplays.AddHandler(
     [System.Windows.Controls.Button]::ClickEvent,
-    [System.Windows.RoutedEventHandler] { Invoke-Guarded { Invoke-RowCommand -EventArgs $args[1] } })
+    [System.Windows.RoutedEventHandler] {
+        # $args belongs to the handler, not to the block Invoke-Guarded runs:
+        # reading $args[1] in there indexes an empty array. Hand it over
+        # through $script:State, as everything else does.
+        $script:State.RowEvent = $args[1]
+        Invoke-Guarded { Invoke-RowCommand -EventArgs $script:State.RowEvent }
+    })
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)
