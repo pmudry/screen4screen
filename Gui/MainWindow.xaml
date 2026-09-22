@@ -35,6 +35,9 @@
     <sys:String x:Key="S_NoThumb">Aperçu impossible pour ce format d'image.</sys:String>
     <sys:String x:Key="S_NotMatched">Windows ne distingue pas cet écran ; l'image sera appliquée partout.</sys:String>
     <sys:String x:Key="S_PickLabel">Choisir une image...</sys:String>
+    <sys:String x:Key="S_ThemeToDark">Thème sombre</sys:String>
+    <sys:String x:Key="S_ThemeToLight">Thème clair</sys:String>
+    <sys:String x:Key="S_ThemeTip">Bascule entre l'apparence claire et l'apparence sombre. Au premier lancement, celle de Windows est reprise.</sys:String>
     <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
 
     <!-- Light values. Show-WallpaperGui.ps1 replaces every one of these when
@@ -424,11 +427,16 @@
       </Rectangle.Fill>
     </Rectangle>
 
-    <StackPanel Grid.Row="1" Margin="20,16,20,0">
-      <TextBlock Text="Fonds d'écran par écran" FontSize="20" FontWeight="SemiBold"/>
-      <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."
-                 Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
-    </StackPanel>
+    <DockPanel Grid.Row="1" Margin="20,16,20,0">
+      <Button DockPanel.Dock="Right" x:Name="BtnTheme"
+              Style="{StaticResource LinkButton}" VerticalAlignment="Top"
+              ToolTip="{DynamicResource S_ThemeTip}"/>
+      <StackPanel>
+        <TextBlock Text="Fonds d'écran par écran" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."
+                   Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
+      </StackPanel>
+    </DockPanel>
 
     <Grid Grid.Row="2" Margin="20,18,20,0">
       <Grid.ColumnDefinitions>

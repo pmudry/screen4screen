@@ -60,7 +60,9 @@ Double-click `WallpaperGui.cmd`, or run:
 .\Set-WallpaperByResolution.ps1 -Gui
 ```
 
-One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single checkbox. It follows the Windows light/dark setting and refreshes itself when you dock or undock.
+One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single switch. It refreshes itself when you dock or undock.
+
+It opens on `examples/wallpapers` the first time, and takes its light or dark appearance from Windows. The button in the top right switches between the two and remembers your choice.
 
 The timing knobs (`-PollSeconds`, `-SettleDelay`) are deliberately not in the window; they stay on the command line.
 

@@ -87,6 +87,7 @@ $script:State = @{
     Thumbs       = @{}
     Rows         = $null
     Loaded       = $false
+    Dark         = $false
 }
 
 $script:SettingsPath = Join-Path (Split-Path (Get-WallpaperLogPath) -Parent) 'gui-settings.json'
@@ -104,6 +105,7 @@ function Get-DefaultRoot {
 function Import-GuiSetting {
     $root     = Get-DefaultRoot
     $position = 'Fill'
+    $dark     = Get-WindowsDarkMode
 
     if (Test-Path -LiteralPath $script:SettingsPath -PathType Leaf) {
         try {
@@ -111,12 +113,14 @@ function Import-GuiSetting {
             $names = $d.PSObject.Properties.Name
             if ($names -contains 'root'     -and $d.root)     { $root     = $d.root }
             if ($names -contains 'position' -and $d.position) { $position = $d.position }
+            if ($names -contains 'dark') { $dark = [bool] $d.dark }
         }
         catch { }   # a hand-mangled file must not stop the window opening
     }
 
     $script:State.Root     = $root
     $script:State.Position = $position
+    $script:State.Dark     = $dark
 }
 
 function Export-GuiSetting {
@@ -128,6 +132,7 @@ function Export-GuiSetting {
         $json = [pscustomobject]@{
             root     = $script:State.Root
             position = $script:State.Position
+            dark     = $script:State.Dark
         } | ConvertTo-Json
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText($script:SettingsPath, $json, $utf8)
@@ -150,7 +155,8 @@ finally { $reader.Dispose() }
 
 $ui = @{}
 foreach ($name in @('TxtRoot', 'BtnBrowse', 'CmbPosition', 'LstDisplays', 'BtnRefresh',
-                    'TglAuto', 'TxtAutoState', 'TxtStatus', 'BtnLog', 'BtnApply')) {
+                    'TglAuto', 'TxtAutoState', 'TxtStatus', 'BtnLog', 'BtnApply',
+                    'BtnTheme')) {
     $control = $window.FindName($name)
     if ($null -eq $control) { throw ("MainWindow.xaml has no control named '{0}'." -f $name) }
     $ui[$name] = $control
@@ -185,27 +191,45 @@ function Invoke-Guarded {
 # Theme
 #------------------------------------------------------------------------------
 
-function Set-DarkTheme {
-    $isLight = $true
+# Both palettes are spelled out here rather than relying on the values baked
+# into the XAML: switching back to light has to restore them explicitly.
+$script:Palette = @{
+    Light = @(
+        @('WindowBrush',   '#FFFFFFFF'), @('SurfaceBrush',     '#FFF5F6F7'),
+        @('FieldBrush',    '#FFFFFFFF'), @('BorderBrush2',     '#FFD9DCE0'),
+        @('TextBrush',     '#FF1A1C1E'), @('SubtleBrush',      '#FF5A6068'),
+        @('AccentBrush',   '#FFB0296A'), @('OnAccentBrush',    '#FFFFFFFF'),
+        @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
+        @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD')
+    )
+    Dark = @(
+        @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',     '#FF24272B'),
+        @('FieldBrush',    '#FF1F2226'), @('BorderBrush2',     '#FF3A3F45'),
+        @('TextBrush',     '#FFECEEF0'), @('SubtleBrush',      '#FFA8AFB7'),
+        @('AccentBrush',   '#FFE2ABBA'), @('OnAccentBrush',    '#FF1B1D20'),
+        @('ThumbBrush',    '#FF2E3236'), @('HoverBrush',       '#FF2E3236'),
+        @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057')
+    )
+}
+
+function Get-WindowsDarkMode {
+    # Only consulted on the very first launch; after that the user's own
+    # choice is remembered.
     try {
         $key = Get-ItemProperty -ErrorAction Stop `
                -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' `
                -Name 'AppsUseLightTheme'
-        $isLight = ([int] $key.AppsUseLightTheme) -ne 0
+        return (([int] $key.AppsUseLightTheme) -eq 0)
     }
-    catch { }   # key absent on older builds: stay light
+    catch { return $false }   # key absent on older builds: assume light
+}
 
-    if ($isLight) { return }
+function Set-Theme {
+    param([bool] $Dark)
 
-    $dark = @(
-        @('WindowBrush',      '#FF1B1D20'), @('SurfaceBrush',  '#FF24272B'),
-        @('FieldBrush',       '#FF1F2226'), @('BorderBrush2',  '#FF3A3F45'),
-        @('TextBrush',        '#FFECEEF0'), @('SubtleBrush',   '#FFA8AFB7'),
-        @('AccentBrush',      '#FFE2ABBA'), @('OnAccentBrush', '#FF1B1D20'),
-        @('ThumbBrush',       '#FF2E3236'), @('HoverBrush',    '#FF2E3236'),
-        @('PressedBrush',     '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057')
-    )
-    foreach ($pair in $dark) {
+    $palette = if ($Dark) { $script:Palette.Dark } else { $script:Palette.Light }
+
+    foreach ($pair in $palette) {
         $color = [System.Windows.Media.ColorConverter]::ConvertFromString($pair[1])
         $brush = New-Object System.Windows.Media.SolidColorBrush $color
         $brush.Freeze()
@@ -214,6 +238,12 @@ function Set-DarkTheme {
         # then tries to use the brush's ToString as the property value.
         $window.Resources[$pair[0]] = [System.Windows.Media.Brush] $brush
     }
+
+    $script:State.Dark = $Dark
+
+    # The button offers the other theme, so it says where a click leads.
+    $script:Ui.BtnTheme.Content =
+        if ($Dark) { Get-Text 'S_ThemeToLight' } else { Get-Text 'S_ThemeToDark' }
 }
 
 
@@ -485,7 +515,7 @@ function Invoke-Tick {
 #------------------------------------------------------------------------------
 
 Import-GuiSetting
-Set-DarkTheme
+Set-Theme -Dark $script:State.Dark
 
 $ui.TxtRoot.Text = $script:State.Root
 
@@ -528,6 +558,13 @@ $ui.CmbPosition.Add_SelectionChanged({
         Export-GuiSetting
         Sync-AutoTask
         Set-Status 'S_Saved'
+    }
+})
+
+$ui.BtnTheme.Add_Click({
+    Invoke-Guarded {
+        Set-Theme -Dark (-not $script:State.Dark)
+        Export-GuiSetting
     }
 })
 
