@@ -45,9 +45,8 @@ if ([System.Environment]::OSVersion.Version -lt [Version]'6.2') {
 
 $script:TaskName = 'screen4screen'
 
-# $env:LOCALAPPDATA is null off Windows, and Join-Path would fail to bind at
-# import time. The module must still import on Linux so the pure-PowerShell
-# parts stay testable in CI.
+# $env:LOCALAPPDATA is not guaranteed even on Windows: it is empty under some
+# service accounts, and Join-Path would fail to bind at import time.
 $script:LogDir = if ($env:LOCALAPPDATA) {
                      Join-Path $env:LOCALAPPDATA 'screen4screen'
                  }
@@ -85,19 +84,43 @@ function Write-Log {
         default { Write-Verbose $line }
     }
 
+    # -WhatIf:$false throughout: the preference reaches here from whichever
+    # function is being previewed, and the log is not one of the operations
+    # the user is asking about. Without it a -WhatIf run announced every line
+    # it was not writing to log.txt, which drowned the answer.
     try {
         if (-not (Test-Path -LiteralPath $script:LogDir)) {
-            New-Item -ItemType Directory -Path $script:LogDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $script:LogDir -Force -WhatIf:$false | Out-Null
         }
         # crude rotation: truncate beyond 512 KB
         if ((Test-Path -LiteralPath $script:LogFile) -and
             ((Get-Item -LiteralPath $script:LogFile).Length -gt 512KB)) {
             $keep = Get-Content -LiteralPath $script:LogFile -Tail 500
-            Set-Content -LiteralPath $script:LogFile -Value $keep -Encoding UTF8
+            Set-Content -LiteralPath $script:LogFile -Value $keep -Encoding UTF8 -WhatIf:$false
         }
-        Add-Content -LiteralPath $script:LogFile -Value $line -Encoding UTF8
+        Add-Content -LiteralPath $script:LogFile -Value $line -Encoding UTF8 -WhatIf:$false
     }
     catch { }   # logging must never break the caller
+}
+
+
+#------------------------------------------------------------------------------
+# Paths
+#------------------------------------------------------------------------------
+
+function Resolve-RootPath {
+    # PowerShell's current directory and the process's own are two different
+    # things, and .NET file APIs use the process one, so Save-WallpaperAssignment
+    # and Test-Path could disagree about where a relative folder is. The
+    # scheduled task is worse: it starts in system32, so a relative path baked
+    # into its command line can never be found. Everything downstream gets an
+    # absolute path instead.
+    param([string] $Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
+
+    try   { return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path) }
+    catch { return $Path }   # a path the provider cannot parse is the caller's problem, not ours
 }
 
 
@@ -226,8 +249,9 @@ namespace WallByRes
 
         int GetStatus();
 
-        [return: MarshalAs(UnmanagedType.Bool)]
-        bool Enable([MarshalAs(UnmanagedType.Bool)] bool enable);
+        // HRESULT Enable(BOOL), no out parameter: declaring a bool return
+        // would add a phantom BOOL* argument to the vtable slot.
+        void Enable([MarshalAs(UnmanagedType.Bool)] bool enable);
     }
 
     [ComImport]
@@ -249,6 +273,7 @@ namespace WallByRes
     {
         private const int WM_DISPLAYCHANGE  = 0x007E;
         private const int WM_DESTROY        = 0x0002;
+        private const int WM_CLOSE          = 0x0010;
         private const int WS_EX_TOOLWINDOW  = 0x00000080;
 
         private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -286,6 +311,9 @@ namespace WallByRes
         private static extern ushort RegisterClassEx(ref WNDCLASSEX lpwcx);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool UnregisterClass(string lpClassName, IntPtr hInstance);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr CreateWindowEx(
             int exStyle, string className, string windowName, int style,
             int x, int y, int width, int height,
@@ -293,9 +321,6 @@ namespace WallByRes
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern bool DestroyWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetMessage(out MSG msg, IntPtr hWnd, uint min, uint max);
@@ -305,6 +330,9 @@ namespace WallByRes
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern void PostQuitMessage(int exitCode);
 
         private readonly System.Threading.ManualResetEvent _signal =
             new System.Threading.ManualResetEvent(false);
@@ -316,6 +344,8 @@ namespace WallByRes
         private WndProcDelegate _proc;
         private System.Threading.Thread _thread;
         private IntPtr _hwnd;
+        private string _className;
+        private int _lastError;
         private bool _disposed;
 
         public DisplayNotifier()
@@ -330,19 +360,30 @@ namespace WallByRes
             {
                 throw new InvalidOperationException("The display notifier window did not start.");
             }
+
+            // Failing loudly rather than handing back an object whose Wait()
+            // can only ever time out: the caller then knows to fall back to
+            // polling instead of logging "event-driven" and quietly not being.
+            if (_hwnd == IntPtr.Zero)
+            {
+                throw new System.ComponentModel.Win32Exception(
+                    _lastError, "The display notifier window could not be created.");
+            }
         }
 
         private void Pump()
         {
-            string className = "screen4screen_display_" + Guid.NewGuid().ToString("N");
+            _className = "screen4screen_display_" + Guid.NewGuid().ToString("N");
 
             WNDCLASSEX wc = new WNDCLASSEX();
             wc.cbSize        = (uint) Marshal.SizeOf(typeof(WNDCLASSEX));
             wc.lpfnWndProc   = _proc;
-            wc.lpszClassName = className;
+            wc.lpszClassName = _className;
 
             if (RegisterClassEx(ref wc) == 0)
             {
+                _lastError = Marshal.GetLastWin32Error();
+                _className = null;
                 _ready.Set();
                 return;
             }
@@ -352,23 +393,40 @@ namespace WallByRes
             // It is never shown, so it costs nothing on screen. WS_EX_TOOLWINDOW
             // keeps it out of Alt-Tab and the taskbar regardless, and the title
             // differs from the real window so lookups cannot confuse the two.
-            _hwnd = CreateWindowEx(WS_EX_TOOLWINDOW, className,
+            _hwnd = CreateWindowEx(WS_EX_TOOLWINDOW, _className,
                                    "screen4screen display sink", 0,
                                    0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            if (_hwnd == IntPtr.Zero) { _lastError = Marshal.GetLastWin32Error(); }
 
             _ready.Set();
-            if (_hwnd == IntPtr.Zero) { return; }
+            if (_hwnd == IntPtr.Zero)
+            {
+                UnregisterClass(_className, IntPtr.Zero);
+                _className = null;
+                return;
+            }
 
             MSG msg;
             while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0)
             {
                 DispatchMessage(ref msg);
             }
+
+            // Only reachable once WM_DESTROY has been handled below, so the
+            // window is gone and the class can go with it. A class cannot be
+            // unregistered while a window of it still exists.
+            UnregisterClass(_className, IntPtr.Zero);
+            _className = null;
         }
 
         private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
             if (msg == WM_DISPLAYCHANGE) { _signal.Set(); }
+
+            // Ends the GetMessage loop above. Without it the pump thread runs
+            // for the life of the process however hard Dispose tries.
+            if (msg == WM_DESTROY) { PostQuitMessage(0); }
+
             return DefWindowProc(hWnd, msg, wParam, lParam);
         }
 
@@ -390,10 +448,20 @@ namespace WallByRes
 
             if (_hwnd != IntPtr.Zero)
             {
-                PostMessage(_hwnd, WM_DESTROY, IntPtr.Zero, IntPtr.Zero);
-                DestroyWindow(_hwnd);
+                // WM_CLOSE, not WM_DESTROY, and posted rather than called:
+                // DestroyWindow only works on the thread that created the
+                // window, and WM_DESTROY is a notification that DefWindowProc
+                // ignores, so the old pair destroyed nothing. DefWindowProc
+                // turns WM_CLOSE into a DestroyWindow on the pump thread,
+                // which then reaches WndProc as WM_DESTROY.
+                PostMessage(_hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
                 _hwnd = IntPtr.Zero;
             }
+
+            if (_thread != null) { _thread.Join(2000); }
+
+            _signal.Close();
+            _ready.Close();
         }
     }
 
@@ -460,7 +528,26 @@ namespace WallByRes
         if (-not (Test-Path -LiteralPath $script:LogDir)) {
             New-Item -ItemType Directory -Path $script:LogDir -Force | Out-Null
         }
-        $dll = Join-Path $script:LogDir ('WallByRes-{0}.dll' -f $hash)
+
+        # The edition belongs in the name. Windows PowerShell cannot load an
+        # assembly built by PowerShell 7 (it references System.Runtime where
+        # 5.1 wants mscorlib), Add-Type -Path throws, and the failed load
+        # leaves the file locked so the rebuild below cannot replace it
+        # either: every later 5.1 run then fell back to compiling in memory,
+        # for good. Naming them apart lets each host keep its own.
+        $edition = if ($PSVersionTable.PSVersion.Major -ge 6) { 'Core' } else { 'Desktop' }
+        $name    = 'WallByRes-{0}-{1}.dll' -f $edition, $hash
+        $dll     = Join-Path $script:LogDir $name
+
+        # Editing the embedded C# changes the hash and so the file name. Sweep
+        # what earlier builds left behind, or they accumulate for ever. Match
+        # on the hash rather than the whole name: the other edition's copy of
+        # the current source is not stale, and deleting it would have each
+        # host rebuild whenever the other one had run.
+        $keep = 'WallByRes-*-{0}.dll' -f $hash
+        Get-ChildItem -LiteralPath $script:LogDir -Filter 'WallByRes-*.dll' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike $keep } |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
     }
     catch { $dll = $null }
 
@@ -564,21 +651,18 @@ function Resolve-AssignmentImage {
     return (Join-Path $Root $Image)
 }
 
-function Get-WallpaperAssignment {
-    <#
-    .SYNOPSIS
-        Reads the manual per-monitor assignments from wallpapers.json.
-    .DESCRIPTION
-        Returns one object per saved assignment, including monitors that are
-        not currently connected, so a caller can list them by name. A missing
-        or unreadable file yields nothing and never throws: the watch loop
-        must survive a hand-edited or half-synced file.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string] $Root)
+function Get-AssignmentRecord {
+    # The one reader. Ok is $false when the file is there but cannot be made
+    # sense of, which is the difference that matters: a read-only caller
+    # carries on with nothing, a writer refuses to overwrite it.
+    param([string] $Root)
 
+    $Root = Resolve-RootPath $Root
     $path = Get-AssignmentPath -Root $Root
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return @() }
+
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return [pscustomobject]@{ Ok = $true; Items = @() }
+    }
 
     try {
         $raw  = Get-Content -LiteralPath $path -Raw
@@ -586,11 +670,19 @@ function Get-WallpaperAssignment {
     }
     catch {
         Write-Log ("Ignoring unreadable {0}: {1}" -f $script:AssignmentFile, $_.Exception.Message) 'WARN'
-        return @()
+        return [pscustomobject]@{ Ok = $false; Items = @() }
     }
 
-    if (-not $data) { return @() }
-    if (-not ($data.PSObject.Properties.Name -contains 'assignments')) { return @() }
+    # An empty file is exactly what a sync tool leaves mid-flight, and a file
+    # without 'assignments' is not one of ours. Neither is safe to rebuild.
+    if (-not $data) {
+        Write-Log ("{0} is empty; leaving it alone." -f $script:AssignmentFile) 'WARN'
+        return [pscustomobject]@{ Ok = $false; Items = @() }
+    }
+    if (-not ($data.PSObject.Properties.Name -contains 'assignments')) {
+        Write-Log ("{0} has no 'assignments'; leaving it alone." -f $script:AssignmentFile) 'WARN'
+        return [pscustomobject]@{ Ok = $false; Items = @() }
+    }
 
     $result = @()
     foreach ($a in @($data.assignments)) {
@@ -611,7 +703,24 @@ function Get-WallpaperAssignment {
         }
     }
 
-    return $result
+    return [pscustomobject]@{ Ok = $true; Items = $result }
+}
+
+function Get-WallpaperAssignment {
+    <#
+    .SYNOPSIS
+        Reads the manual per-monitor assignments from wallpapers.json.
+    .DESCRIPTION
+        Returns one object per saved assignment, including monitors that are
+        not currently connected, so a caller can list them by name. A missing
+        or unreadable file yields nothing and never throws: the watch loop
+        must survive a hand-edited or half-synced file. Writers go through
+        Get-AssignmentRecord, which tells those two cases apart.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string] $Root)
+
+    return (Get-AssignmentRecord -Root $Root).Items
 }
 
 function Save-WallpaperAssignment {
@@ -656,7 +765,7 @@ function Set-WallpaperAssignment {
         are stored for display only, so a disconnected monitor can still be
         listed by name.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [Parameter(Mandatory = $true)][string] $Root,
         [Parameter(Mandatory = $true)][string] $DevicePath,
@@ -664,6 +773,8 @@ function Set-WallpaperAssignment {
         [string] $Friendly,
         [string] $Resolution
     )
+
+    $Root = Resolve-RootPath $Root
 
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
         throw "Image folder not found: $Root"
@@ -680,8 +791,15 @@ function Set-WallpaperAssignment {
         }
     }
 
-    $kept = @(Get-WallpaperAssignment -Root $Root |
-              Where-Object { $_.DevicePath -ine $DevicePath })
+    # Never rebuild the file from a read that failed: pinning an image while
+    # the folder is mid-sync would otherwise drop every other monitor's pin.
+    $existing = Get-AssignmentRecord -Root $Root
+    if (-not $existing.Ok) {
+        throw ("{0} exists but cannot be read; refusing to overwrite it." -f
+               (Get-AssignmentPath -Root $Root))
+    }
+
+    $kept = @($existing.Items | Where-Object { $_.DevicePath -ine $DevicePath })
 
     $kept += [pscustomobject]@{
         DevicePath = $DevicePath
@@ -691,8 +809,11 @@ function Set-WallpaperAssignment {
         Image      = $stored
     }
 
+    $who = if ($Friendly) { $Friendly } else { $DevicePath }
+    if (-not $PSCmdlet.ShouldProcess($who, ("Pin {0}" -f $stored))) { return }
+
     Save-WallpaperAssignment -Root $Root -Assignment $kept
-    Write-Log ("Assignment saved: {0} -> {1}" -f $(if ($Friendly) { $Friendly } else { $DevicePath }), $stored)
+    Write-Log ("Assignment saved: {0} -> {1}" -f $who, $stored)
 }
 
 function Remove-WallpaperAssignment {
@@ -700,16 +821,25 @@ function Remove-WallpaperAssignment {
     .SYNOPSIS
         Drops the manual assignment for one monitor, back to automatic choice.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [Parameter(Mandatory = $true)][string] $Root,
         [Parameter(Mandatory = $true)][string] $DevicePath
     )
 
-    $all  = @(Get-WallpaperAssignment -Root $Root)
+    $Root = Resolve-RootPath $Root
+
+    $existing = Get-AssignmentRecord -Root $Root
+    if (-not $existing.Ok) {
+        throw ("{0} exists but cannot be read; refusing to overwrite it." -f
+               (Get-AssignmentPath -Root $Root))
+    }
+
+    $all  = @($existing.Items)
     $kept = @($all | Where-Object { $_.DevicePath -ine $DevicePath })
 
     if ($kept.Count -eq $all.Count) { return }
+    if (-not $PSCmdlet.ShouldProcess($DevicePath, 'Remove the pinned image')) { return }
 
     Save-WallpaperAssignment -Root $Root -Assignment $kept
     Write-Log ("Assignment removed for {0}" -f $DevicePath)
@@ -783,7 +913,8 @@ function Resolve-WallpaperFile {
         [string] $Root
     )
 
-    return (Resolve-WallpaperCandidate -Width $Width -Height $Height -Root $Root).Path
+    return (Resolve-WallpaperCandidate -Width $Width -Height $Height `
+                                       -Root (Resolve-RootPath $Root)).Path
 }
 
 
@@ -806,6 +937,8 @@ function Get-WallpaperPlan {
     param(
         [Parameter(Mandatory = $true)][string] $Root
     )
+
+    $Root = Resolve-RootPath $Root
 
     $known = @()
     try   { $known = @([WallByRes.Wallpaper]::GetMonitorPaths()) }
@@ -881,7 +1014,7 @@ function Set-MonitorWallpaper {
         Pass an empty DevicePath to let Windows apply the image to every
         monitor, which is the only option when the monitor cannot be matched.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string] $DevicePath,
         [Parameter(Mandatory = $true)][string] $Image,
@@ -895,6 +1028,11 @@ function Set-MonitorWallpaper {
     $target = [NullString]::Value
     if (-not [string]::IsNullOrEmpty($DevicePath)) { $target = $DevicePath }
 
+    $who = if ([string]::IsNullOrEmpty($DevicePath)) { 'every monitor' } else { $DevicePath }
+    if (-not $PSCmdlet.ShouldProcess($who, ("Set the wallpaper to {0} ({1})" -f $Image, $PositionName))) {
+        return
+    }
+
     [WallByRes.Wallpaper]::Apply($target, $Image, $script:PositionValue[$PositionName])
 }
 
@@ -904,13 +1042,17 @@ function Set-WallpapersNow {
         Applies the right wallpaper to every attached monitor.
     .DESCRIPTION
         Returns one result object per monitor, so a caller can report on the
-        outcome instead of parsing the log.
+        outcome instead of parsing the log. Under -WhatIf the plan is still
+        worked out and returned, with Applied false throughout, so it doubles
+        as "show me what you would do".
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string] $Root,
         [string] $PositionName
     )
+
+    $Root = Resolve-RootPath $Root
 
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
         Write-Log "Wallpaper folder not found: $Root" 'ERROR'
@@ -927,16 +1069,16 @@ function Set-WallpapersNow {
 
     foreach ($p in $plan) {
 
-        $ok    = $false
-        $error = $null
+        $ok      = $false
+        $failure = $null
 
         if (-not $p.Image) {
-            $error = 'no exact, ratio or default match'
+            $failure = 'no exact, ratio or default match'
             Write-Log ("No image for {0} ({1}x{2}) - {3}." -f `
-                       $p.Friendly, $p.Width, $p.Height, $error) 'WARN'
+                       $p.Friendly, $p.Width, $p.Height, $failure) 'WARN'
         }
         elseif (-not $p.Matched -and $plan.Count -gt 1) {
-            $error = 'monitor not found in IDesktopWallpaper'
+            $failure = 'monitor not found in IDesktopWallpaper'
             Write-Log ("Monitor not found in IDesktopWallpaper, skipped: {0} [{1}]" -f `
                        $p.Friendly, $p.DevicePath) 'WARN'
         }
@@ -950,27 +1092,38 @@ function Set-WallpapersNow {
             }
 
             try {
-                Set-MonitorWallpaper -DevicePath $devicePath -Image $p.Image -PositionName $PositionName
-                $ok = $true
-                $applied++
-                Write-Log ("{0}  {1}x{2}  ->  {3}" -f `
-                           $p.Friendly, $p.Width, $p.Height, (Split-Path $p.Image -Leaf))
+                # This function owns the interaction, so the inner one is told
+                # not to ask the same question over again.
+                if ($PSCmdlet.ShouldProcess($p.Friendly,
+                        ("Set the wallpaper to {0}" -f (Split-Path $p.Image -Leaf)))) {
+
+                    Set-MonitorWallpaper -DevicePath $devicePath -Image $p.Image `
+                                         -PositionName $PositionName -Confirm:$false
+                    $ok = $true
+                    $applied++
+                    Write-Log ("{0}  {1}x{2}  ->  {3}" -f `
+                               $p.Friendly, $p.Width, $p.Height, (Split-Path $p.Image -Leaf))
+                }
             }
             catch {
-                $error = $_.Exception.Message
-                Write-Log ("Failed on {0}: {1}" -f $p.Friendly, $error) 'ERROR'
+                $failure = $_.Exception.Message
+                Write-Log ("Failed on {0}: {1}" -f $p.Friendly, $failure) 'ERROR'
             }
         }
 
+        # A superset of the plan: the window rebuilds its list straight from
+        # these, so anything Get-WallpaperPlan emits has to survive the trip.
         [pscustomobject]@{
             Friendly   = $p.Friendly
             DevicePath = $p.DevicePath
             Width      = $p.Width
             Height     = $p.Height
+            IsPrimary  = $p.IsPrimary
             Image      = $p.Image
             Source     = $p.Source
+            Matched    = $p.Matched
             Applied    = $ok
-            Error      = $error
+            Error      = $failure
         }
     }
 
@@ -1017,6 +1170,9 @@ function Start-WallpaperWatch {
         transcoded wallpaper cache shortly after a topology change and the
         first pass is often overwritten.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        'PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'A blocking watch loop. The applying is Set-WallpapersNow, which supports -WhatIf; previewing the loop itself would say nothing.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string] $Root,
@@ -1026,6 +1182,8 @@ function Start-WallpaperWatch {
         [ValidateRange(1, 300)][int]    $PollSeconds = 15,
         [ValidateRange(0, 30)][double]  $SettleDelay = 2.0
     )
+
+    $Root = Resolve-RootPath $Root
 
     # Event first, polling only as a safety net. Enumerating the adapters
     # costs about 50 ms, which is not free every few seconds on a laptop.
@@ -1050,8 +1208,11 @@ function Start-WallpaperWatch {
                         Write-Log 'Display configuration change detected.'
                     }
 
-                    # Let Windows finish rearranging the desktop.
-                    Start-Sleep -Seconds $SettleDelay
+                    # Let Windows finish rearranging the desktop. Milliseconds,
+                    # because Start-Sleep -Seconds takes an [int] on Windows
+                    # PowerShell 5.1 and would round a fractional delay away on
+                    # the very host the scheduled task runs.
+                    Start-Sleep -Milliseconds ([int][Math]::Round($SettleDelay * 1000))
                     $signature = Get-DisplaySignature
 
                     Set-WallpapersNow -Root $Root -PositionName $PositionName | Out-Null
@@ -1168,6 +1329,9 @@ function Install-WallpaperTask {
 
     $LauncherPath = (Get-Item -LiteralPath $LauncherPath).FullName
 
+    # The task starts in system32, so a relative folder would never be found.
+    $Root = Resolve-RootPath $Root
+
     # Windows PowerShell, deliberately: the task must not depend on PS 7 being
     # installed. -ExecutionPolicy Bypass because the machine policy may be
     # AllSigned and this script is not signed.
@@ -1176,8 +1340,16 @@ function Install-WallpaperTask {
         $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     }
 
+    # A trailing backslash escapes the closing quote: "D:\Wallpapers\" is read
+    # by CommandLineToArgvW as one argument running on into the rest of the
+    # line, so -WallpaperRoot swallowed the remainder and -Position was never
+    # passed at all. Doubling the trailing run is the escape the C runtime
+    # expects, and a drive root such as D:\ is exactly what the folder picker
+    # in the window hands back.
+    $rootArg = $Root -replace '(\\+)$', '$1$1'
+
     $psArgs = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass ' +
-              ('-File "{0}" -WallpaperRoot "{1}" -Position {2}' -f $LauncherPath, $Root, $PositionName)
+              ('-File "{0}" -WallpaperRoot "{1}" -Position {2}' -f $LauncherPath, $rootArg, $PositionName)
 
     # -WindowStyle Hidden still creates the console and only then hides it,
     # which flashes a black window at every logon and every time the task is

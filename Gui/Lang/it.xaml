@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Italian strings for the screen4screen window.
+
+     Every user-facing string lives in one of these files, never in the code.
+     The window merges the chosen one into its resources and refers to each
+     string with {DynamicResource}, so switching language re-renders the
+     window in place. Keep the keys identical across all four files: the
+     window falls back to English for a key that is missing.
+
+     UTF-8, and the XML declaration above says so, which is why accented text
+     is safe here and not in the .ps1 files. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <sys:String x:Key="S_Applying">Applicazione in corso...</sys:String>
+  <sys:String x:Key="S_Applied">{0} schermo/i aggiornato/i.</sys:String>
+  <sys:String x:Key="S_AppliedPartial">{0} schermi su {1} aggiornati. Dettagli nel registro.</sys:String>
+  <sys:String x:Key="S_Saved">Impostazioni salvate.</sys:String>
+  <sys:String x:Key="S_TopologyChanged">I tuoi schermi sono cambiati, l'elenco è aggiornato.</sys:String>
+  <sys:String x:Key="S_TopologyChangedIdle">I tuoi schermi sono cambiati. Clicca «Applica ora».</sys:String>
+  <sys:String x:Key="S_FolderMissing">Questa cartella non esiste.</sys:String>
+  <sys:String x:Key="S_NoDisplay">Nessuno schermo rilevato. Prova «Aggiorna».</sys:String>
+  <sys:String x:Key="S_AutoOn">Attivo: gli sfondi seguiranno i tuoi schermi.</sys:String>
+  <sys:String x:Key="S_AutoOff">Inattivo: gli sfondi non cambieranno più da soli.</sys:String>
+  <sys:String x:Key="S_AutoPaused">In pausa: riprenderà al tuo prossimo accesso.</sys:String>
+  <sys:String x:Key="S_AutoFailed">Impossibile cambiare questa impostazione. Dettagli nel registro.</sys:String>
+  <sys:String x:Key="S_Error">Si è verificato un errore. Dettagli nel registro.</sys:String>
+  <sys:String x:Key="S_PickTitle">Scegli un'immagine per questo schermo</sys:String>
+  <sys:String x:Key="S_BrowseTitle">Scegli la cartella che contiene le tue immagini.</sys:String>
+  <sys:String x:Key="S_SourceAuto">(scelta automaticamente)</sys:String>
+  <sys:String x:Key="S_SourceManual">(tua scelta)</sys:String>
+  <sys:String x:Key="S_NoImage">Nessuna immagine corrisponde a questo schermo.</sys:String>
+  <sys:String x:Key="S_NoThumb">Anteprima non disponibile per questo formato d'immagine.</sys:String>
+  <sys:String x:Key="S_NotMatched">Windows non distingue questo schermo; l'immagine sarà applicata ovunque.</sys:String>
+  <sys:String x:Key="S_PickLabel">Scegli un'immagine...</sys:String>
+  <sys:String x:Key="S_ChangeLabel">Cambia...</sys:String>
+  <sys:String x:Key="S_LoadingPreviews">Caricamento delle anteprime...</sys:String>
+  <sys:String x:Key="S_Working">Un attimo...</sys:String>
+  <sys:String x:Key="S_ThemeToDark">Passa all'aspetto scuro</sys:String>
+  <sys:String x:Key="S_ThemeToLight">Passa all'aspetto chiaro</sys:String>
+  <sys:String x:Key="S_Tagline">Un'immagine di sfondo adatta a ogni risoluzione dello schermo</sys:String>
+  <sys:String x:Key="S_FolderLabel">Cartella delle immagini</sys:String>
+  <sys:String x:Key="S_BrowseLabel">Sfoglia...</sys:String>
+  <sys:String x:Key="S_PositionLabel">Disposizione dell'immagine</sys:String>
+  <sys:String x:Key="S_PosFill">Riempito (ritagliato se necessario)</sys:String>
+  <sys:String x:Key="S_PosFit">Immagine intera (bande ai lati)</sys:String>
+  <sys:String x:Key="S_PosStretch">Deformato per riempire</sys:String>
+  <sys:String x:Key="S_PosCenter">Centrato, dimensione reale</sys:String>
+  <sys:String x:Key="S_PosTile">Affiancato</sys:String>
+  <sys:String x:Key="S_PosSpan">Una sola immagine su tutti gli schermi</sys:String>
+  <sys:String x:Key="S_RefreshLabel">Aggiorna</sys:String>
+  <sys:String x:Key="S_ScreensHeading">I tuoi schermi</sys:String>
+  <sys:String x:Key="S_PrimaryBadge">Schermo principale</sys:String>
+  <sys:String x:Key="S_AutoLabel">Torna all'automatico</sys:String>
+  <sys:String x:Key="S_AutoToggle">Cambia gli sfondi automaticamente</sys:String>
+  <sys:String x:Key="S_AutoToggleTip">Quando è attivo, gli sfondi si rimettono a posto da soli non appena colleghi, scolleghi o cambi uno schermo, anche dopo un riavvio.</sys:String>
+  <sys:String x:Key="S_ApplyLabel">Applica ora</sys:String>
+  <sys:String x:Key="S_LogLabel">Vedi il registro</sys:String>
+  <sys:String x:Key="S_LogTip">Apre il file di testo in cui il programma annota ciò che fa.</sys:String>
+  <sys:String x:Key="S_ThemeName">Cambia aspetto</sys:String>
+  <sys:String x:Key="S_AboutName">Informazioni su screen4screen</sys:String>
+  <sys:String x:Key="S_AboutTip">Che cosa fa questo programma sul tuo computer</sys:String>
+  <sys:String x:Key="S_LangName">Cambia lingua</sys:String>
+  <sys:String x:Key="S_LangTip">Scegli la lingua di questa finestra</sys:String>
+  <sys:String x:Key="S_AboutTitle">Che cosa fa questo programma</sys:String>
+  <sys:String x:Key="S_AboutIntro">Ogni schermo riceve un'immagine fatta per la sua risoluzione, e gli sfondi si rimettono a posto quando cambi schermo.</sys:String>
+  <sys:String x:Key="S_AboutChangesHeading">Che cosa modifica</sys:String>
+  <sys:String x:Key="S_AboutChanges1">Il tuo sfondo, e nient'altro nelle tue impostazioni di visualizzazione.</sys:String>
+  <sys:String x:Key="S_AboutChanges2">Con il cambio automatico attivo: un'attività pianificata di nome screen4screen, avviata al tuo accesso, con il tuo account e senza diritti di amministratore. Disattivarla la rimuove.</sys:String>
+  <sys:String x:Key="S_AboutFilesIntro">Tre file, tutti eliminabili:</sys:String>
+  <sys:String x:Key="S_AboutFile3">wallpapers.json, nella tua cartella di immagini</sys:String>
+  <sys:String x:Key="S_AboutNotHeading">Che cosa non fa</sys:String>
+  <sys:String x:Key="S_AboutNot1">Nessuna connessione a internet, nessun dato inviato.</sys:String>
+  <sys:String x:Key="S_AboutNot2">Le tue immagini sono solo lette, mai modificate né spostate.</sys:String>
+  <sys:String x:Key="S_AboutNot3">Non installa nulla e non scrive nulla fuori dal tuo account.</sys:String>
+  <sys:String x:Key="S_AboutSpotlightHeading">Se gli sfondi tornano da soli</sys:String>
+  <sys:String x:Key="S_AboutSpotlight">Disattiva Windows Spotlight e la presentazione in Impostazioni, Personalizzazione, Sfondo.</sys:String>
+  <sys:String x:Key="S_ShowTaskLabel">Mostra l'attività in Windows</sys:String>
+  <sys:String x:Key="S_ShowTaskTip">Apre l'Utilità di pianificazione di Windows, dove l'attività screen4screen può essere esaminata o rimossa a mano.</sys:String>
+  <sys:String x:Key="S_GithubTip">Apri la pagina del progetto nel browser</sys:String>
+  <sys:String x:Key="S_CloseLabel">Chiudi</sys:String>
+  <sys:String x:Key="S_Version">Versione {0}</sys:String>
+
+</ResourceDictionary>

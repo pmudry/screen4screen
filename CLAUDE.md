@@ -16,15 +16,18 @@ Layout:
 - `screen4screen.ps1` - thin CLI wrapper at the repo root. Its
   parameter block and comment-based help are the documented surface; keep
   them in step with README.md.
-- `Gui/` - the WPF manager: `Show-Screen4ScreenGui.ps1` (ASCII host) plus
-  `MainWindow.xaml` (UTF-8, holds every user-facing string).
+- `Gui/` - the WPF manager: `Show-Screen4ScreenGui.ps1` (ASCII host),
+  `MainWindow.xaml` and `AboutWindow.xaml` (UTF-8, structure only), and
+  `Gui/Lang/{fr,en,de,it}.xaml`, which hold every user-facing string.
 - `screen4screen.cmd` - launcher needing no build, but it shows a console.
 - `build/` - `Launcher.cs` plus `Build-Launcher.ps1`, which compiles
   `screen4screen.exe` with the .NET Framework compiler that ships with
   Windows. `/target:winexe` is what removes the console for good, and
   `/win32icon` is the only way to get an icon in Explorer. The `.exe` is
   gitignored; build it after cloning.
-- `examples/wallpapers/` - three ISC sample backgrounds, named for the lookup.
+- `wallpapers/` - the default image folder, holding three ISC sample
+  backgrounds named for the lookup. Both entry points default here, so a
+  fresh clone works with no argument; everything else in it is gitignored.
 
 ## Design decisions, do not undo without a reason
 
@@ -56,6 +59,24 @@ Layout:
 - **The `WndProcDelegate` is held in a field.** If it is collected the window
   procedure becomes a dangling pointer and the process dies on the next
   message.
+- **`DisplayNotifier` is torn down with `WM_CLOSE`, from the pump thread.**
+  The first version posted `WM_DESTROY` and then called `DestroyWindow` from
+  the disposing thread. Neither does anything: `WM_DESTROY` is a notification
+  `DefWindowProc` ignores, and `DestroyWindow` only works on the thread that
+  created the window. Measured, not assumed - after `Dispose()` the window was
+  still a window and the pump thread still running. Posting `WM_CLOSE` lets
+  `DefWindowProc` call `DestroyWindow` on the owning thread; `WndProc` answers
+  `WM_DESTROY` with `PostQuitMessage`, which ends `GetMessage`, and only then
+  can the class be unregistered. The constructor now throws when the window
+  cannot be created, so a caller falls back to polling instead of holding a
+  notifier whose `Wait` can only time out.
+- **The compiled assembly is cached per host edition.** The file name carries
+  the source hash *and* `Desktop`/`Core`. Windows PowerShell cannot load an
+  assembly built by PowerShell 7, `Add-Type -Path` throws, and the failed load
+  leaves the file locked so the rebuild cannot replace it either: every later
+  5.1 run fell back to compiling in memory, permanently. The sweep of old
+  builds matches on the hash, not the whole name, or each host would delete
+  the other's copy and both would rebuild for ever.
 - C# is embedded via `Add-Type` and must stay **C# 5 compatible** (no
   expression-bodied members, no string interpolation, no `nameof`) so it
   compiles under Windows PowerShell 5.1's built-in compiler.
@@ -63,6 +84,35 @@ Layout:
   union is flattened as `dmPositionX/Y + dmDisplayOrientation +
   dmDisplayFixedOutput` (16 bytes, matches both union arms). Do not
   reorder fields.
+- **The scheduled task's `-WallpaperRoot` has its trailing backslashes
+  doubled.** Inside a quoted argument a trailing `\` escapes the closing
+  quote, so `"D:\Wallpapers\"` is read by `CommandLineToArgvW` as one
+  argument running on into the rest of the line: `-WallpaperRoot` swallowed
+  the remainder and `-Position` was never passed at all. A drive root is
+  exactly what the folder picker in the window returns. Doubling the trailing
+  run is the escape the C runtime expects.
+- **Every public `-Root` is resolved to an absolute path** through
+  `Resolve-RootPath`. The task starts in `system32`, so a relative folder
+  baked into its command line can never be found; and PowerShell's current
+  directory is not the process's, which `[System.IO.File]::WriteAllText` in
+  `Save-WallpaperAssignment` uses.
+- **Writers refuse to rebuild `wallpapers.json` from a read that failed.**
+  `Get-AssignmentRecord` returns `Ok = $false` when the file is present but
+  empty, unparseable or foreign in shape - the state a sync tool leaves
+  mid-flight. Read-only callers carry on with nothing, as the watch loop must;
+  `Set-` and `Remove-WallpaperAssignment` throw rather than drop every other
+  monitor's pin.
+- **`Start-Sleep -Milliseconds`, never `-Seconds`, for `SettleDelay`.** The
+  parameter is a `[double]`, but `-Seconds` takes an `[int]` on Windows
+  PowerShell 5.1 and a `[double]` on 7: measured, `-SettleDelay 0.4` slept
+  2 ms under 5.1 and 413 ms under pwsh, on the host the task actually uses.
+- **`$PSScriptRoot` is empty inside a `param()` default.** Defaults are
+  evaluated before it is populated, so `[string] $WallpaperRoot = (Join-Path
+  $PSScriptRoot 'wallpapers')` made `Join-Path` throw during parameter
+  binding: the process died before the script body, and before any trap, so
+  nothing reached the log and the launcher could only report an exit code.
+  The default is filled in in the body instead. Reading the AST of a default
+  proves nothing; run the script.
 - **Never pass `$null` to a P/Invoke or COM `[string]` parameter.** PowerShell
   binds `$null` as the empty string, and `EnumDisplayDevices("")` fails where
   `EnumDisplayDevices(NULL)` enumerates the adapters. This silently returned
@@ -88,6 +138,42 @@ Layout:
 
 ## GUI notes
 
+- **A custom `TextBox` template must not bind `Padding` into the content
+  host's `Margin`.** `TextBoxBase` already pushes its `Padding` onto
+  `PART_ContentHost`, so `Margin="{TemplateBinding Padding}"` applied it
+  twice: the path sat 27px from its border (1 border + 12 margin + 12 padding
+  + 2) while the drop-down underneath sat at 15, and the two rows visibly
+  failed to line up. Measured through the visual tree, both are at x=156 now.
+  The `ComboBox` template ignores `Padding` entirely and hardcodes
+  `Margin="15,0,32,0"` on its `ContentPresenter`, which is the number the
+  text box has to match.
+- **The window can be measured and rendered without ever being shown**, which
+  is the only way to check alignment from a machine that cannot open it: move
+  `Window.Content` into a `Border`, carry `Window.Resources` across or every
+  implicit style is lost, `Measure`/`Arrange`/`UpdateLayout`, then walk it
+  with `VisualTreeHelper` and `TransformToAncestor`, or hand it to a
+  `RenderTargetBitmap` and look at the PNG.
+- **Every user-facing string lives in `Gui/Lang/<code>.xaml`,** one
+  `ResourceDictionary` per language, all carrying the same keys. The window
+  merges the chosen one into its resources and refers to each string with
+  `{DynamicResource}`; swapping the merged dictionary re-resolves every one
+  of them, so the window changes language where it stands, with nothing
+  rebuilt and no reopening. `StaticResource` would not re-resolve, so never
+  use it for a string. Two things the code owns instead of the markup and so
+  must be refreshed by hand: the theme tooltip, which depends on which way
+  the switch will go, and the monitor rows, whose text was copied into
+  `DisplayRow` when the list was built.
+- **The language dictionary is recognised by a key it must carry**
+  (`S_Applying`) rather than by a reference kept in `$script:State`. That is
+  what stops two dictionaries stacking up after a few switches, with no
+  bookkeeping to keep in step.
+- **The default language is `CurrentUICulture`, not `CurrentCulture`.** The
+  first is the language Windows shows its own interface in, which is what the
+  user actually reads; the second only decides how dates and numbers are
+  written. An unknown one falls back to English, and the user's own choice is
+  remembered in `gui-settings.json` from then on.
+- German is written with Swiss spelling (`ss`, never `ß`), and English with
+  British spelling, both deliberate for a Swiss school.
 - **Assigning a brush into `Window.Resources` needs an explicit cast.** The
   `ResourceDictionary` indexer takes an `object`, so nothing forces PowerShell
   to unwrap its `PSObject`; WPF then stores the wrapper and falls back to its
@@ -144,6 +230,35 @@ one present on every install.
 
 ## GUI traps found the hard way
 
+- **A local `$plan` IS the `$Plan` parameter.** Variable names are
+  case-insensitive, so `Update-DisplayList`'s habitual `$plan = @()` emptied
+  the argument it had just been handed, `if ($Plan)` was always false, and the
+  plan was silently recomputed - picking a fresh random image every time. The
+  local is `$entries` now. Watch for this wherever a parameter and a local
+  read the same aloud.
+- **`@($P).Count` throws under `Set-StrictMode -Version Latest` when `$P` is
+  an unbound `[object[]]` parameter**, although `@($x).Count` on a plain
+  `$null` variable is 1. Test `$null -ne $P` first and let it short-circuit,
+  which is what `Set-Status` does.
+- **`if ($Arg)` is false for `@(0)`.** A single-element array is evaluated as
+  its element, so a count of zero skipped the `[string]::Format` and the user
+  was shown a literal `{0}`. Use `$Arg.Count -gt 0`.
+- **The image folder is committed in `Set-RootFolder`, nowhere else.** It used
+  to live in `TxtRoot`'s `LostFocus` alone, which the Browse button cannot
+  reach: clicking it moves focus away *before* the dialog opens, so LostFocus
+  fired with the old text and nothing fired again afterwards. Enter on the
+  text box is the same story, since `IsDefault` raises Apply without moving
+  focus.
+- **`Invoke-ApplyNow` wraps everything in `try/finally`.** Its early return on
+  a missing folder used to skip the `finally` that re-enables the Apply
+  button, which then stayed grey for the rest of the session.
+- **The notifier gate stays open while a change is pending.** `Wait(0)` clears
+  the event, so a change seen on one tick is gone by the next and the debounce
+  could never reach its second tick; the list only refreshed on the 15 s
+  fallback, which defeated the point of listening for `WM_DISPLAYCHANGE`.
+- **`Invoke-Deferred` carries its body on the timer's `Tag`.** One shared slot
+  in `$script:State` meant two deferrals queued inside the same 30 ms window
+  dropped the first and ran the second twice.
 - **`$args` inside a block handed to `Invoke-Guarded` is empty.** The block
   is invoked with no arguments, so `$args[1]` there indexes nothing. Read
   the event in the handler itself and pass it through `$script:State`. The
@@ -177,7 +292,7 @@ one present on every install.
 - Functions are `Verb-Noun` with approved verbs.
 - Log through `Write-Log`; never let logging throw.
 - No external modules. The only binaries tracked are the three ISC sample
-  backgrounds under `examples/wallpapers/` and the icon under `assets/`;
+  backgrounds under `wallpapers/` and the icon under `assets/`;
   keep it that way. The icon is generated by a short PIL script, kept in the
   commit message rather than as a build step.
 
@@ -198,10 +313,24 @@ one present on every install.
    fall back to the plain host and keep the flash.
 5. ~~Event-driven trigger catching `WM_DISPLAYCHANGE`.~~ Done, for both the
    watcher and the window.
-6. `-WhatIf` support on `Set-WallpapersNow`.
+6. ~~`-WhatIf` support on `Set-WallpapersNow`.~~ Done, and on
+   `Set-MonitorWallpaper`, `Set-WallpaperAssignment` and
+   `Remove-WallpaperAssignment` with it. `Set-WallpapersNow` owns the
+   interaction and passes `-Confirm:$false` inward so the inner function does
+   not ask the same question twice; under `-WhatIf` it still returns the whole
+   plan with `Applied` false, so it doubles as "show me what you would do".
+   `Write-Log` passes `-WhatIf:$false` to its file cmdlets, or a preview
+   announced every line it was not writing to the log. `Start-WallpaperWatch`
+   and the window's private helpers carry a `SuppressMessageAttribute`
+   instead, with the reason written where it applies.
 7. Publish to PowerShell Gallery. The module folder name already matches
    the module name, so `Publish-Module -Path ./screen4screen` works.
 8. CI: PSScriptAnalyzer + Pester on `windows-latest`.
+   `PSScriptAnalyzerSettings.psd1` is in place and the tree is clean: run
+   `Invoke-ScriptAnalyzer -Path . -Recurse -Settings
+   .\PSScriptAnalyzerSettings.psd1` and expect nothing back. Only rules this
+   repository breaks on purpose are excluded there; everything else is
+   suppressed where it sits, with a reason.
 
 ## Testing on a real machine
 

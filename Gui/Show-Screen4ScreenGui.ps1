@@ -17,11 +17,49 @@
 
 #Requires -Version 5.1
 
+# The state-changing verbs in this file all belong to private helpers of this
+# window -- Update-DisplayList, Start-ThumbnailDrain, Set-RootFolder and the
+# rest. None is a cmdlet anyone calls, and none has anything for -WhatIf to
+# describe; the functions that do are in the module, and they support it.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSUseShouldProcessForStateChangingFunctions', '',
+    Justification = 'Private helpers of this window, not cmdlets; the module owns every state change worth previewing.')]
 [CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Nothing here has a console to complain to: the launcher starts this with
+# CreateNoWindow, so anything thrown before the window is up used to end as an
+# exit code nobody saw. A script-scope trap catches whatever escapes, without
+# wrapping the whole file in a try block. The log path is spelled out rather
+# than asked of the module, which may be exactly what failed to import.
+trap {
+    $detail = "{0}`n{1}" -f $_, $_.ScriptStackTrace
+
+    try {
+        $dir = Join-Path $env:LOCALAPPDATA 'screen4screen'
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        Add-Content -LiteralPath (Join-Path $dir 'log.txt') -Encoding UTF8 -Value (
+            '{0}  {1,-5}  {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), 'GUI',
+            ($detail -replace "`r?`n", ' <- '))
+    }
+    catch { }
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        [void] [System.Windows.Forms.MessageBox]::Show(
+            $detail, 'screen4screen',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+    catch { }
+
+    exit 1
+}
 
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -113,26 +151,48 @@ $script:State = @{
     Deferred     = $null
     FallbackTick = 0
     Rows         = $null
+    Plan         = $null
     Loaded       = $false
     Dark         = $false
+    Language     = 'en'
+    LangEvent    = $null
 }
+
+# The four the window ships with. A dictionary per code under Gui\Lang, all
+# carrying the same keys; anything else falls back to English.
+$script:Languages = @('fr', 'en', 'de', 'it')
 
 $script:SettingsPath = Join-Path (Split-Path (Get-WallpaperLogPath) -Parent) 'gui-settings.json'
 
 function Get-DefaultRoot {
-    # The three sample backgrounds that ship with the repository, so a fresh
-    # clone opens on something real instead of an empty folder.
-    $examples = Join-Path (Split-Path $PSScriptRoot -Parent) 'examples\wallpapers'
-    if (Test-Path -LiteralPath $examples -PathType Container) {
-        return (Get-Item -LiteralPath $examples).FullName
+    # The folder shipped with the repository, holding the three sample
+    # backgrounds, so a fresh clone opens on something real instead of an
+    # empty folder. Same default as the CLI wrapper's -WallpaperRoot.
+    $shipped = Join-Path (Split-Path $PSScriptRoot -Parent) 'wallpapers'
+    if (Test-Path -LiteralPath $shipped -PathType Container) {
+        return (Get-Item -LiteralPath $shipped).FullName
     }
     return (Join-Path $env:USERPROFILE 'Pictures\Wallpapers')
+}
+
+function Get-DefaultLanguage {
+    # Only consulted on the very first launch; after that the user's own choice
+    # is remembered. CurrentUICulture, not CurrentCulture: the first is the
+    # language Windows shows its own interface in, the second only decides how
+    # dates and numbers are written.
+    try {
+        $tag = [System.Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName
+        if ($script:Languages -contains $tag) { return $tag }
+    }
+    catch { }
+    return 'en'
 }
 
 function Import-GuiSetting {
     $root     = Get-DefaultRoot
     $position = 'Fill'
     $dark     = Get-WindowsDarkMode
+    $language = Get-DefaultLanguage
 
     if (Test-Path -LiteralPath $script:SettingsPath -PathType Leaf) {
         try {
@@ -141,6 +201,10 @@ function Import-GuiSetting {
             if ($names -contains 'root'     -and $d.root)     { $root     = $d.root }
             if ($names -contains 'position' -and $d.position) { $position = $d.position }
             if ($names -contains 'dark') { $dark = [bool] $d.dark }
+            if ($names -contains 'language' -and $d.language -and
+                ($script:Languages -contains [string] $d.language)) {
+                $language = [string] $d.language
+            }
         }
         catch { }   # a hand-mangled file must not stop the window opening
     }
@@ -148,6 +212,7 @@ function Import-GuiSetting {
     $script:State.Root     = $root
     $script:State.Position = $position
     $script:State.Dark     = $dark
+    $script:State.Language = $language
 }
 
 function Export-GuiSetting {
@@ -160,6 +225,7 @@ function Export-GuiSetting {
             root     = $script:State.Root
             position = $script:State.Position
             dark     = $script:State.Dark
+            language = $script:State.Language
         } | ConvertTo-Json
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText($script:SettingsPath, $json, $utf8)
@@ -183,7 +249,8 @@ finally { $reader.Dispose() }
 $ui = @{}
 foreach ($name in @('TxtRoot', 'BtnBrowse', 'CmbPosition', 'LstDisplays', 'BtnRefresh',
                     'TglAuto', 'TxtAutoState', 'TxtStatus', 'BtnLog', 'BtnApply',
-                    'BtnTheme', 'BtnAbout', 'IconSun', 'IconMoon')) {
+                    'BtnTheme', 'BtnAbout', 'IconSun', 'IconMoon',
+                    'BtnLang', 'TxtLang', 'PopLang', 'BtnTask')) {
     $control = $window.FindName($name)
     if ($null -eq $control) { throw ("MainWindow.xaml has no control named '{0}'." -f $name) }
     $ui[$name] = $control
@@ -197,8 +264,13 @@ function Get-Text {
 
 function Set-Status {
     param([string] $Key, [object[]] $Arg)
+
     $text = Get-Text $Key
-    if ($Arg) { $text = [string]::Format($text, $Arg) }
+
+    # $Arg.Count, not $Arg: a lone argument of 0 makes @(0) falsy, the format
+    # is skipped and the user is shown a literal "{0}".
+    if ($null -ne $Arg -and $Arg.Count -gt 0) { $text = [string]::Format($text, $Arg) }
+
     $script:Ui.TxtStatus.Text = $text
 }
 
@@ -208,13 +280,17 @@ function Invoke-Deferred {
     # timer so the UI renders first, then blocks.
     param([scriptblock] $Body)
 
-    $script:State.Deferred = $Body
-
     $timer = New-Object System.Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(30)
+
+    # Carried on the timer rather than in $script:State: two deferrals queued
+    # inside the same 30 ms window shared the one slot, so the first body was
+    # dropped and the second ran twice. $this is the timer, which is how the
+    # handler reaches it without a closure.
+    $timer.Tag = $Body
     $timer.Add_Tick({
         $this.Stop()
-        Invoke-Guarded { & $script:State.Deferred }
+        Invoke-Guarded $this.Tag
     })
     $timer.Start()
 }
@@ -257,6 +333,62 @@ function Invoke-Guarded {
         Write-GuiLog ("{0} | at {1}" -f $_.Exception.Message,
                       ($_.ScriptStackTrace -replace "`r?`n", ' <- '))
     }
+}
+
+
+#------------------------------------------------------------------------------
+# Language
+#------------------------------------------------------------------------------
+
+function Set-WindowLanguage {
+    # Takes the window so the about box can be switched the same way. Swapping
+    # a merged dictionary re-resolves every {DynamicResource} that refers into
+    # it, so the window changes language where it stands, with nothing to
+    # rebuild and no reopening.
+    param([System.Windows.Window] $Target, [string] $Language)
+
+    $path = Join-Path $PSScriptRoot ('Lang\{0}.xaml' -f $Language)
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $path = Join-Path $PSScriptRoot 'Lang\en.xaml'
+    }
+
+    # XmlReader on the path, not [xml](Get-Content): the dictionaries are UTF-8
+    # and Get-Content would guess the encoding under 5.1 and mangle the
+    # accents, which is the same trap the window itself is loaded around.
+    $reader = [System.Xml.XmlReader]::Create($path)
+    try   { $dict = [System.Windows.Markup.XamlReader]::Load($reader) }
+    finally { $reader.Dispose() }
+
+    # Recognised by a key every dictionary must carry, so there is no
+    # bookkeeping to keep in step with what was merged last.
+    $old = @($Target.Resources.MergedDictionaries | Where-Object { $_.Contains('S_Applying') })
+    foreach ($d in $old) { [void] $Target.Resources.MergedDictionaries.Remove($d) }
+
+    [void] $Target.Resources.MergedDictionaries.Add($dict)
+}
+
+function Set-Language {
+    param([string] $Language)
+
+    if ($script:Languages -notcontains $Language) { $Language = 'en' }
+
+    Set-WindowLanguage -Target $window -Language $Language
+    $script:State.Language  = $Language
+    $script:Ui.TxtLang.Text = $Language.ToUpperInvariant()
+
+    # Two things the code owns rather than the markup, so they do not follow
+    # the dictionary on their own: the theme tooltip, which depends on which
+    # way the switch will go, and the rows, whose text was copied into
+    # DisplayRow when the list was built.
+    Set-Theme -Dark $script:State.Dark
+
+    if ($script:State.Loaded) {
+        Update-DisplayList
+        Update-AutoState
+        $script:Ui.TxtStatus.Text = ''
+    }
+
+    Export-GuiSetting
 }
 
 
@@ -355,19 +487,24 @@ function Show-AboutWindow {
     try   { $about = [System.Windows.Markup.XamlReader]::Load($reader) }
     finally { $reader.Dispose() }
 
-    Set-WindowPalette -Target $about -Dark $script:State.Dark
-    Set-WindowIcon    -Target $about
+    Set-WindowLanguage -Target $about -Language $script:State.Language
+    Set-WindowPalette  -Target $about -Dark $script:State.Dark
+    Set-WindowIcon     -Target $about
     $about.Owner = $window
 
     $version = $about.FindName('TxtVersion')
     if ($version) {
         $module = Get-Module Screen4Screen
-        if ($module) { $version.Text = 'Version ' + $module.Version.ToString() }
+        if ($module) {
+            $version.Text = [string]::Format((Get-Text 'S_Version'), $module.Version.ToString())
+        }
     }
 
     $github = $about.FindName('BtnGithub')
     if ($github) {
-        $github.Add_Click({ Start-Process 'https://github.com/pmudry/screen4screen' })
+        $github.Add_Click({
+            Invoke-Guarded { Start-Process 'https://github.com/pmudry/screen4screen' }
+        })
     }
 
     $close = $about.FindName('BtnClose')
@@ -496,7 +633,8 @@ function Invoke-ThumbnailDrain {
 
     $script:State.Jobs = $pending
 
-    if ($arrived) { Update-DisplayList }
+    # Same plan, so the rows keep the images the thumbnails were decoded for.
+    if ($arrived) { Update-DisplayList -Plan $script:State.Plan }
 
     if ($script:State.Jobs.Count -eq 0) {
         $script:State.DrainTimer.Stop()
@@ -515,15 +653,29 @@ function Invoke-ThumbnailDrain {
 function Update-DisplayList {
     # Never blocks: thumbnails that are not decoded yet come back as $null
     # and the drain timer rebuilds the list once they land.
+    #
+    # -Plan rebuilds from a plan already in hand. Recomputing one picks a
+    # fresh random image every time a candidate is a folder, so the drain used
+    # to swap the picture out from under the thumbnail it had just decoded,
+    # queue a decode for the new one, and show something other than what was
+    # actually applied.
+    param([object[]] $Plan)
+
     $root = $script:State.Root
     $rows = New-Object System.Collections.ObjectModel.ObservableCollection[object]
 
-    $plan = @()
-    if ($root -and (Test-Path -LiteralPath $root -PathType Container)) {
-        $plan = @(Get-WallpaperPlan -Root $root)
+    # $entries, not $plan: variable names are case-insensitive here, so a
+    # local $plan IS the $Plan parameter, and initialising it emptied the
+    # argument before it could be read.
+    $entries = @()
+    if ($Plan) {
+        $entries = @($Plan)
+    }
+    elseif ($root -and (Test-Path -LiteralPath $root -PathType Container)) {
+        $entries = @(Get-WallpaperPlan -Root $root)
     }
     else {
-        $plan = @(Get-AttachedDisplay | ForEach-Object {
+        $entries = @(Get-AttachedDisplay | ForEach-Object {
             [pscustomobject]@{
                 Friendly = $_.Friendly; DevicePath = $_.DevicePath
                 Width = $_.Width; Height = $_.Height; IsPrimary = $_.IsPrimary
@@ -532,7 +684,7 @@ function Update-DisplayList {
         })
     }
 
-    foreach ($p in $plan) {
+    foreach ($p in $entries) {
         $row = New-Object WallByResGui.DisplayRow
         $row.Friendly         = $p.Friendly
         $row.DevicePath       = $p.DevicePath
@@ -578,7 +730,10 @@ function Update-DisplayList {
             $row.ProblemVisibility = 'Visible'
         }
 
-        if (-not $p.Matched -and $plan.Count -gt 1) {
+        # Only when there is an image to apply. Set-WallpapersNow reports the
+        # missing image first, and telling the user the image will be applied
+        # everywhere, about a monitor that gets nothing at all, is just wrong.
+        if ($p.Image -and -not $p.Matched -and $entries.Count -gt 1) {
             $row.ProblemText       = Get-Text 'S_NotMatched'
             $row.ProblemVisibility = 'Visible'
         }
@@ -586,6 +741,7 @@ function Update-DisplayList {
         $rows.Add($row)
     }
 
+    $script:State.Plan = $entries
     $script:State.Rows = $rows
     $script:Ui.LstDisplays.ItemsSource = $rows
 
@@ -600,6 +756,9 @@ function Update-DisplayList {
 function Update-AutoState {
     $state = Get-WallpaperTaskState
     $script:Ui.TglAuto.IsChecked = $state.Installed
+
+    # Nothing to show anyone while there is no task.
+    $script:Ui.BtnTask.Visibility = if ($state.Installed) { 'Visible' } else { 'Collapsed' }
 
     if (-not $state.Installed)  { $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoOff';    return }
     if ($state.Running)         { $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoOn';     return }
@@ -627,9 +786,24 @@ function Set-AutoMode {
 function Sync-AutoTask {
     # The task bakes the folder and the fit mode into its command line, so a
     # settings change has to be pushed into it or the background pass would
-    # keep using the old values.
-    if ((Get-WallpaperTaskState).Installed) {
-        Invoke-Guarded { Set-AutoMode -Enabled $true }
+    # keep using the old values. The watcher already running holds the old
+    # ones in its own arguments and MultipleInstances IgnoreNew means
+    # Start-ScheduledTask is ignored while it is up, so it has to be stopped
+    # first or the change would not take until the next logon.
+    #
+    # Returns whether it worked, because the callers used to write "saved"
+    # over the error Invoke-Guarded had just put on the status line.
+    if (-not (Get-WallpaperTaskState).Installed) { return $true }
+
+    try {
+        Stop-ScheduledTask -TaskName 'screen4screen' -ErrorAction SilentlyContinue | Out-Null
+        Set-AutoMode -Enabled $true | Out-Null
+        return $true
+    }
+    catch {
+        Write-GuiLog ('Sync-AutoTask failed: {0} | at {1}' -f $_.Exception.Message,
+                      ($_.ScriptStackTrace -replace "`r?`n", ' <- '))
+        return $false
     }
 }
 
@@ -638,28 +812,58 @@ function Sync-AutoTask {
 # Actions
 #------------------------------------------------------------------------------
 
+function Set-RootFolder {
+    # The one place the folder is committed. It used to live in TxtRoot's
+    # LostFocus alone, which the Browse button cannot reach: clicking it moves
+    # focus away before the dialog opens, so LostFocus fired with the old text
+    # and nothing fired again afterwards. Picking a folder and pressing Apply
+    # then applied from the previous one.
+    param([string] $Value)
+
+    $value = ([string] $Value).Trim()
+    if ($value -eq $script:State.Root) { return }
+
+    $script:State.Root = $value
+    $script:Ui.TxtRoot.Text = $value
+
+    Export-GuiSetting
+    Update-DisplayList
+
+    if (Sync-AutoTask) { Set-Status 'S_Saved' } else { Set-Status 'S_Error' }
+}
+
 function Invoke-ApplyNow {
-    $root = $script:State.Root
-    if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) {
-        Set-Status 'S_FolderMissing'
-        return
-    }
-
-    Set-Status 'S_Applying'
-    $script:Ui.BtnApply.IsEnabled = $false
-
     try {
+        # Enter on the text box raises Apply through IsDefault without ever
+        # moving focus, so the typed folder has to be taken in here too.
+        Set-RootFolder $script:Ui.TxtRoot.Text
+
+        $root = $script:State.Root
+        if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) {
+            Set-Status 'S_FolderMissing'
+            return
+        }
+
+        Set-Status 'S_Applying'
+
         $results = @(Set-WallpapersNow -Root $root -PositionName $script:State.Position)
         $done    = @($results | Where-Object { $_.Applied }).Count
+
+        # The list before the message: rebuilding it may start a thumbnail
+        # decode, and the drain writes a status of its own that would land on
+        # top of the count. Rebuilt from the results, so the rows say what was
+        # actually applied rather than a fresh random pick.
+        if ($results.Count -gt 0) { Update-DisplayList -Plan $results }
+        else                      { Update-DisplayList }
 
         if ($done -eq $results.Count) { Set-Status 'S_Applied' @($done) }
         else { Set-Status 'S_AppliedPartial' @($done, $results.Count) }
     }
     finally {
+        # Whatever happened, and however early we left: the early return above
+        # used to leave the button greyed out for the rest of the session.
         $script:Ui.BtnApply.IsEnabled = $true
     }
-
-    Update-DisplayList
 }
 
 function Select-RowImage {
@@ -690,9 +894,10 @@ function Select-RowImage {
 }
 
 function Invoke-RowCommand {
-    param([object] $EventArgs)
+    # Not $EventArgs: that is an automatic variable in an event scriptblock.
+    param([object] $RowEvent)
 
-    $source = $EventArgs.OriginalSource
+    $source = $RowEvent.OriginalSource
     if ($source -isnot [System.Windows.Controls.Button]) { return }
 
     $row = $source.DataContext
@@ -744,7 +949,12 @@ function Invoke-Tick {
     $script:State.FallbackTick++
     $forced = ($script:State.FallbackTick % 15) -eq 0
 
-    if ($script:State.Notifier) {
+    # Wait(0) clears the event, so a change seen on one tick is gone by the
+    # next. While one is still settling the gate has to stay open, or the
+    # debounce below can never reach its second tick and the list only
+    # refreshes on the 15 s fallback -- which defeated the whole point of
+    # listening for WM_DISPLAYCHANGE.
+    if ($script:State.Notifier -and -not $script:State.Pending) {
         if (-not $script:State.Notifier.Wait(0) -and -not $forced) { return }
     }
 
@@ -785,6 +995,12 @@ function Invoke-Tick {
 #------------------------------------------------------------------------------
 
 Import-GuiSetting
+
+# Before anything reads a string: Set-Theme picks its tooltip out of the
+# dictionary, and every {DynamicResource} in the markup needs it merged.
+Set-WindowLanguage -Target $window -Language $script:State.Language
+$ui.TxtLang.Text = $script:State.Language.ToUpperInvariant()
+
 Set-WindowIcon -Target $window
 Set-Theme -Dark $script:State.Dark
 
@@ -793,7 +1009,13 @@ $ui.TxtRoot.Text = $script:State.Root
 foreach ($item in $ui.CmbPosition.Items) {
     if ([string] $item.Tag -eq $script:State.Position) { $ui.CmbPosition.SelectedItem = $item }
 }
-if ($null -eq $ui.CmbPosition.SelectedItem) { $ui.CmbPosition.SelectedIndex = 0 }
+if ($null -eq $ui.CmbPosition.SelectedItem) {
+    # A saved position outside the six (a hand-edited settings file) would
+    # otherwise stay in State, show as something else in the window, and throw
+    # at Set-MonitorWallpaper's ValidateSet the first time Apply was pressed.
+    $ui.CmbPosition.SelectedIndex = 0
+    $script:State.Position = [string] $ui.CmbPosition.SelectedItem.Tag
+}
 
 $ui.BtnBrowse.Add_Click({
     Invoke-Guarded {
@@ -807,7 +1029,7 @@ $ui.BtnBrowse.Add_Click({
         finally { $owner.ReleaseHandle() }
 
         if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-            $script:Ui.TxtRoot.Text = $dialog.SelectedPath
+            Set-RootFolder $dialog.SelectedPath
         }
     }
 })
@@ -822,15 +1044,7 @@ $ui.TxtRoot.Add_PreviewMouseLeftButtonDown({
 })
 
 $ui.TxtRoot.Add_LostFocus({
-    Invoke-Guarded {
-        $value = $script:Ui.TxtRoot.Text.Trim()
-        if ($value -eq $script:State.Root) { return }
-        $script:State.Root = $value
-        Export-GuiSetting
-        Update-DisplayList
-        Sync-AutoTask
-        Set-Status 'S_Saved'
-    }
+    Invoke-Guarded { Set-RootFolder $script:Ui.TxtRoot.Text }
 })
 
 $ui.CmbPosition.Add_SelectionChanged({
@@ -840,12 +1054,30 @@ $ui.CmbPosition.Add_SelectionChanged({
         if ($null -eq $item) { return }
         $script:State.Position = [string] $item.Tag
         Export-GuiSetting
-        Sync-AutoTask
-        Set-Status 'S_Saved'
+        if (Sync-AutoTask) { Set-Status 'S_Saved' } else { Set-Status 'S_Error' }
     }
 })
 
 $ui.BtnAbout.Add_Click({ Invoke-Guarded { Show-AboutWindow } })
+
+# Opens, never toggles: StaysOpen="False" has already closed the popup by the
+# time this click arrives, so toggling would reopen it and the button would
+# look stuck. Clicking anywhere else closes it.
+$ui.BtnLang.Add_Click({ Invoke-Guarded { $script:Ui.PopLang.IsOpen = $true } })
+
+# One class handler on the popup rather than four subscriptions, the same way
+# the monitor rows are wired.
+$ui.PopLang.Child.AddHandler(
+    [System.Windows.Controls.Button]::ClickEvent,
+    [System.Windows.RoutedEventHandler] {
+        $script:State.LangEvent = $args[1]
+        Invoke-Guarded {
+            $source = $script:State.LangEvent.OriginalSource
+            if ($source -isnot [System.Windows.Controls.Button]) { return }
+            $script:Ui.PopLang.IsOpen = $false
+            Set-Language ([string] $source.Tag)
+        }
+    })
 
 $ui.BtnTheme.Add_Click({
     Invoke-Guarded {
@@ -867,6 +1099,21 @@ $ui.BtnLog.Add_Click({
     Invoke-Guarded {
         $log = Get-WallpaperLogPath
         if (Test-Path -LiteralPath $log) { Start-Process -FilePath $log }
+    }
+})
+
+# Through mmc.exe with the full path rather than Start-Process 'taskschd.msc',
+# which leans on the .msc file association; that is exactly the sort of thing
+# a managed machine rewrites.
+$ui.BtnTask.Add_Click({
+    Invoke-Guarded {
+        $console = Join-Path $env:SystemRoot 'System32\taskschd.msc'
+        if (Test-Path -LiteralPath $console -PathType Leaf) {
+            Start-Process -FilePath 'mmc.exe' -ArgumentList ('"{0}"' -f $console)
+        }
+        else {
+            Start-Process -FilePath 'taskschd.msc'
+        }
     }
 })
 
@@ -907,7 +1154,7 @@ $ui.LstDisplays.AddHandler(
         # reading $args[1] in there indexes an empty array. Hand it over
         # through $script:State, as everything else does.
         $script:State.RowEvent = $args[1]
-        Invoke-Guarded { Invoke-RowCommand -EventArgs $script:State.RowEvent }
+        Invoke-Guarded { Invoke-RowCommand -RowEvent $script:State.RowEvent }
     })
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
@@ -925,9 +1172,36 @@ $window.Add_Loaded({
 })
 
 $window.Add_Closed({
-    $timer.Stop()
-    if ($script:State.Notifier) { $script:State.Notifier.Dispose() }
-    if ($script:State.Pool) { $script:State.Pool.Close(); $script:State.Pool.Dispose() }
+    # Guarded like every other handler: with no Application object there is no
+    # DispatcherUnhandledException, so anything thrown in here would take the
+    # process down without a word.
+    Invoke-Guarded {
+        $timer.Stop()
+
+        if ($script:State.DrainTimer) {
+            $script:State.DrainTimer.Stop()
+            $script:State.DrainTimer = $null
+        }
+
+        # Decodes still in flight. Stop rather than EndInvoke, which would
+        # block the close for as long as a webp takes to expand; without
+        # either, the PowerShell instances are never disposed at all.
+        foreach ($job in $script:State.Jobs) {
+            try { $job.Shell.Stop() }    catch { }
+            try { $job.Shell.Dispose() } catch { }
+        }
+        $script:State.Jobs = @()
+
+        if ($script:State.Notifier) {
+            $script:State.Notifier.Dispose()
+            $script:State.Notifier = $null
+        }
+        if ($script:State.Pool) {
+            $script:State.Pool.Close()
+            $script:State.Pool.Dispose()
+            $script:State.Pool = $null
+        }
+    }
 })
 
 $window.ShowDialog() | Out-Null

@@ -11,36 +11,13 @@
 
   <Window.Resources>
 
-    <!-- Every user-facing string lives here. The .ps1 host is ASCII only,
-         so it fetches these by key rather than embedding accented text. -->
-    <sys:String x:Key="S_Applying">Application en cours...</sys:String>
-    <sys:String x:Key="S_Applied">{0} écran(s) mis à jour.</sys:String>
-    <sys:String x:Key="S_AppliedPartial">{0} écran(s) sur {1} mis à jour. Détails dans le journal.</sys:String>
-    <sys:String x:Key="S_Saved">Réglages enregistrés.</sys:String>
-    <sys:String x:Key="S_TopologyChanged">Vos écrans ont changé, la liste est à jour.</sys:String>
-    <sys:String x:Key="S_TopologyChangedIdle">Vos écrans ont changé. Cliquez « Appliquer maintenant ».</sys:String>
-    <sys:String x:Key="S_FolderMissing">Ce dossier n'existe pas.</sys:String>
-    <sys:String x:Key="S_NoDisplay">Aucun écran détecté. Essayez « Actualiser ».</sys:String>
-    <sys:String x:Key="S_AutoOn">Actif : vos fonds d'écran suivront vos écrans.</sys:String>
-    <sys:String x:Key="S_AutoOff">Inactif : les fonds d'écran ne changeront plus tout seuls.</sys:String>
-    <sys:String x:Key="S_AutoPaused">En pause : ça reprendra à votre prochaine ouverture de session.</sys:String>
-    <sys:String x:Key="S_AutoFailed">Impossible de changer ce réglage. Détails dans le journal.</sys:String>
-    <sys:String x:Key="S_Error">Une erreur est survenue. Détails dans le journal.</sys:String>
-    <sys:String x:Key="S_PickTitle">Choisissez une image pour cet écran</sys:String>
-    <sys:String x:Key="S_BrowseTitle">Choisissez le dossier qui contient vos images.</sys:String>
-    <sys:String x:Key="S_SourceAuto">(choisie automatiquement)</sys:String>
-    <sys:String x:Key="S_SourceManual">(votre choix)</sys:String>
-    <sys:String x:Key="S_NoImage">Aucune image ne correspond à cet écran.</sys:String>
-    <sys:String x:Key="S_NoThumb">Aperçu impossible pour ce format d'image.</sys:String>
-    <sys:String x:Key="S_NotMatched">Windows ne distingue pas cet écran ; l'image sera appliquée partout.</sys:String>
-    <sys:String x:Key="S_PickLabel">Choisir une image...</sys:String>
-    <sys:String x:Key="S_ThemeToDark">Passer à l'apparence sombre</sys:String>
-    <sys:String x:Key="S_ThemeToLight">Passer à l'apparence claire</sys:String>
-    <sys:String x:Key="S_AboutTip">Ce que ce programme fait sur votre ordinateur</sys:String>
-    <sys:String x:Key="S_ThemeTip">Bascule entre l'apparence claire et l'apparence sombre. Au premier lancement, celle de Windows est reprise.</sys:String>
-    <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
-    <sys:String x:Key="S_LoadingPreviews">Chargement des aperçus...</sys:String>
-    <sys:String x:Key="S_Working">Un instant...</sys:String>
+    <!-- Every user-facing string lives in Lang\<code>.xaml, merged into
+         these resources at startup and swapped when the language changes.
+         Neither this file nor the ASCII-only .ps1 host carries display
+         text any more, which is what lets the window speak four languages
+         while the host stays readable under Windows PowerShell 5.1.
+         Refer to a string with DynamicResource, never Static: only
+         DynamicResource re-resolves when the dictionary is swapped. -->
 
     <!-- Light values. Show-Screen4ScreenGui.ps1 replaces every one of these when
          Windows is in dark mode, which is why nothing below uses
@@ -190,6 +167,34 @@
       </Setter>
     </Style>
 
+    <!-- One line of the language menu. Left-aligned and full width, so the
+         four entries read as a list rather than as four little buttons. -->
+    <Style x:Key="LangItem" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Padding" Value="12,7"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="4"
+                    SnapsToDevicePixels="True">
+              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PressedBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderBrush" Value="Transparent"/>
@@ -215,8 +220,11 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}">
+              <!-- No Margin="{TemplateBinding Padding}" here: TextBoxBase
+                   already pushes its Padding onto PART_ContentHost, so
+                   binding it again applied it twice and the path sat 27px
+                   from the border while the drop-down below sat at 15. -->
               <ScrollViewer x:Name="PART_ContentHost"
-                            Margin="{TemplateBinding Padding}"
                             VerticalAlignment="Center"
                             Background="Transparent"/>
             </Border>
@@ -355,6 +363,12 @@
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Track" Property="Opacity" Value="0.85"/>
               </Trigger>
+              <!-- The switch is disabled while the task is being registered.
+                   Without this it went on looking perfectly live. -->
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Track" Property="Opacity" Value="0.45"/>
+                <Setter TargetName="Knob" Property="Opacity" Value="0.45"/>
+              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -444,7 +458,7 @@
               <Border Background="{DynamicResource AccentBrush}" CornerRadius="3"
                       Padding="7,2" Margin="10,0,0,0"
                       Visibility="{Binding BadgeVisibility}">
-                <TextBlock Text="Écran principal" FontSize="11"
+                <TextBlock Text="{DynamicResource S_PrimaryBadge}" FontSize="11"
                            Foreground="{DynamicResource OnAccentBrush}"/>
               </Border>
             </StackPanel>
@@ -468,7 +482,7 @@
 
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
               <Button Tag="pick" Content="{Binding PickLabel}"/>
-              <Button Tag="auto" Content="Revenir à l'automatique" Margin="8,0,0,0"
+              <Button Tag="auto" Content="{DynamicResource S_AutoLabel}" Margin="8,0,0,0"
                       Visibility="{Binding AutoVisibility}"/>
             </StackPanel>
           </StackPanel>
@@ -503,15 +517,52 @@
     <DockPanel Grid.Row="1" Margin="20,16,20,0">
       <Button DockPanel.Dock="Right" x:Name="BtnAbout" Margin="8,0,0,0"
               Style="{StaticResource IconButton}" VerticalAlignment="Top"
+              AutomationProperties.Name="{DynamicResource S_AboutName}"
               ToolTip="{DynamicResource S_AboutTip}">
         <TextBlock Text="?" FontSize="14" FontWeight="SemiBold"
                    Foreground="{DynamicResource FabIconBrush}"
                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Button>
 
+      <!-- The button and its menu share a Grid: a Popup takes no room in the
+           layout, but DockPanel would still give it a slot of its own.
+           The 8px left margin is what every right-docked circle needs: on a
+           DockPanel the margin opens the gap towards the next one along, so
+           leaving it off here made this one sit flush against the theme
+           switch while the other gap was 8. -->
+      <Grid DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Top">
+        <Button x:Name="BtnLang" Style="{StaticResource IconButton}"
+                AutomationProperties.Name="{DynamicResource S_LangName}"
+                ToolTip="{DynamicResource S_LangTip}">
+          <!-- Set from the code to the current two-letter code. -->
+          <TextBlock x:Name="TxtLang" Text="FR" FontSize="11" FontWeight="SemiBold"
+                     Foreground="{DynamicResource FabIconBrush}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Button>
+
+        <!-- The names are endonyms and stay as they are in every language. -->
+        <Popup x:Name="PopLang" PlacementTarget="{Binding ElementName=BtnLang}"
+               Placement="Bottom" HorizontalOffset="-40" VerticalOffset="6"
+               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+          <Border CornerRadius="6" Padding="4" SnapsToDevicePixels="True"
+                  Background="{DynamicResource PopupBrush}"
+                  BorderBrush="{DynamicResource PopupEdgeBrush}" BorderThickness="1">
+            <StackPanel MinWidth="132">
+              <Button Tag="fr" Content="Français" Style="{StaticResource LangItem}"/>
+              <Button Tag="en" Content="English"  Style="{StaticResource LangItem}"/>
+              <Button Tag="de" Content="Deutsch"  Style="{StaticResource LangItem}"/>
+              <Button Tag="it" Content="Italiano" Style="{StaticResource LangItem}"/>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+
+      <!-- ToolTip maps to UIA HelpText, not Name, so an icon-only button is
+           announced as nothing at all without this. The tooltip itself is set
+           from the code, which knows which way the switch will go. -->
       <Button DockPanel.Dock="Right" x:Name="BtnTheme"
               Style="{StaticResource IconButton}" VerticalAlignment="Top"
-              ToolTip="{DynamicResource S_ThemeTip}">
+              AutomationProperties.Name="{DynamicResource S_ThemeName}">
         <Grid>
           <!-- Feather-style strokes on a 24x24 grid, the same shapes the ISC
                sites use, scaled down by the Viewbox. -->
@@ -535,7 +586,7 @@
       </Button>
       <StackPanel>
         <TextBlock Text="screen4screen" FontSize="21" FontWeight="SemiBold"/>
-        <TextBlock Text="Une image adaptée à chaque écran, choisie selon sa résolution."
+        <TextBlock Text="{DynamicResource S_Tagline}"
                    Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
       </StackPanel>
     </DockPanel>
@@ -551,24 +602,24 @@
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
-      <TextBlock Grid.Row="0" Grid.Column="0" Text="Dossier des images"
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource S_FolderLabel}"
                  VerticalAlignment="Center" Margin="0,0,12,0"/>
       <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtRoot"
                  VerticalAlignment="Center"/>
-      <Button    Grid.Row="0" Grid.Column="2" x:Name="BtnBrowse" Content="Parcourir..."
+      <Button    Grid.Row="0" Grid.Column="2" x:Name="BtnBrowse" Content="{DynamicResource S_BrowseLabel}"
                  Margin="8,0,0,0"/>
 
-      <TextBlock Grid.Row="1" Grid.Column="0" Text="Affichage de l'image"
+      <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource S_PositionLabel}"
                  VerticalAlignment="Center" Margin="0,10,12,0"/>
       <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="CmbPosition" Margin="0,10,0,0"
                  VerticalAlignment="Center"
                  HorizontalAlignment="Left" MinWidth="300">
-        <ComboBoxItem Tag="Fill"    Content="Rempli (recadré si besoin)"/>
-        <ComboBoxItem Tag="Fit"     Content="Entier (bandes sur les côtés)"/>
-        <ComboBoxItem Tag="Stretch" Content="Déformé pour remplir"/>
-        <ComboBoxItem Tag="Center"  Content="Centré, taille réelle"/>
-        <ComboBoxItem Tag="Tile"    Content="Répété en mosaïque"/>
-        <ComboBoxItem Tag="Span"    Content="Une seule image sur tous les écrans"/>
+        <ComboBoxItem Tag="Fill"    Content="{DynamicResource S_PosFill}"/>
+        <ComboBoxItem Tag="Fit"     Content="{DynamicResource S_PosFit}"/>
+        <ComboBoxItem Tag="Stretch" Content="{DynamicResource S_PosStretch}"/>
+        <ComboBoxItem Tag="Center"  Content="{DynamicResource S_PosCenter}"/>
+        <ComboBoxItem Tag="Tile"    Content="{DynamicResource S_PosTile}"/>
+        <ComboBoxItem Tag="Span"    Content="{DynamicResource S_PosSpan}"/>
       </ComboBox>
     </Grid>
 
@@ -579,8 +630,8 @@
       </Grid.RowDefinitions>
 
       <DockPanel Grid.Row="0" Margin="0,0,0,8">
-        <Button DockPanel.Dock="Right" x:Name="BtnRefresh" Content="Actualiser"/>
-        <TextBlock Text="Vos écrans" Style="{StaticResource SectionTitle}"
+        <Button DockPanel.Dock="Right" x:Name="BtnRefresh" Content="{DynamicResource S_RefreshLabel}"/>
+        <TextBlock Text="{DynamicResource S_ScreensHeading}" Style="{StaticResource SectionTitle}"
                    VerticalAlignment="Center"/>
       </DockPanel>
 
@@ -596,19 +647,26 @@
             BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
       <StackPanel>
         <CheckBox x:Name="TglAuto" FontWeight="SemiBold"
-                  Content="Changer les fonds d'écran automatiquement"
-                  ToolTip="Quand c'est actif, les fonds d'écran se remettent en place tout seuls dès que vous branchez, débranchez ou changez d'écran, y compris après un redémarrage."/>
+                  Content="{DynamicResource S_AutoToggle}"
+                  ToolTip="{DynamicResource S_AutoToggleTip}"/>
         <TextBlock x:Name="TxtAutoState" Style="{StaticResource Subtle}"
                    Margin="52,6,0,0" TextWrapping="Wrap"/>
+        <!-- Only worth showing while the task exists. Windows offers no way
+             to open the Task Scheduler on a particular task, so this just
+             opens it; ours sits in the root folder under its own name. -->
+        <Button x:Name="BtnTask" Style="{StaticResource LinkButton}"
+                HorizontalAlignment="Left" Margin="48,4,0,0" Visibility="Collapsed"
+                Content="{DynamicResource S_ShowTaskLabel}"
+                ToolTip="{DynamicResource S_ShowTaskTip}"/>
       </StackPanel>
     </Border>
 
     <DockPanel Grid.Row="5" Margin="20,16,20,18">
-      <Button DockPanel.Dock="Right" x:Name="BtnApply" Content="Appliquer maintenant"
+      <Button DockPanel.Dock="Right" x:Name="BtnApply" Content="{DynamicResource S_ApplyLabel}"
               Style="{StaticResource AccentButton}" IsDefault="True"/>
-      <Button DockPanel.Dock="Right" x:Name="BtnLog" Content="Voir le journal"
+      <Button DockPanel.Dock="Right" x:Name="BtnLog" Content="{DynamicResource S_LogLabel}"
               Style="{StaticResource LinkButton}" Margin="0,0,10,0"
-              ToolTip="Ouvre le fichier texte où l'outil note ce qu'il fait."/>
+              ToolTip="{DynamicResource S_LogTip}"/>
       <TextBlock x:Name="TxtStatus" VerticalAlignment="Center"
                  Style="{StaticResource Subtle}" TextTrimming="CharacterEllipsis"/>
     </DockPanel>

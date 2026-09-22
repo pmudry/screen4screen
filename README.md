@@ -6,14 +6,14 @@ Per-monitor wallpapers on Windows, chosen from each monitor's **native resolutio
 
 Built for the usual laptop setup: a 1920x1200 panel, a 5120x2160 ultrawide at the desk, the odd 1920x1080 projector in a meeting room. Each one gets an image that was actually made for its aspect ratio instead of a cropped or stretched compromise.
 
-No dependencies. One PowerShell script, Windows 8 or later.
+No dependencies. PowerShell and Windows 8 or later, nothing else to install.
 
 ## How it works
 
 1. Attached monitors are enumerated with `EnumDisplayDevices` and their native mode is read with `EnumDisplaySettings(ENUM_CURRENT_SETTINGS)`. This yields real pixels, unaffected by DPI scaling (a 5120x2160 display at 150 % reports 5120x2160, not 3413x1440).
 2. Each monitor is matched to its `IDesktopWallpaper` entry by device interface path.
 3. An image is picked by naming convention (below) and applied per monitor through `IDesktopWallpaper::SetWallpaper`.
-4. A lightweight loop polls the display topology every few seconds and re-applies on change, with a short settle delay and a second pass, because Windows likes to restore its own cached wallpaper right after a topology change.
+4. A hidden window listens for `WM_DISPLAYCHANGE`, so docking or undocking is picked up at once; a slow poll (`-PollSeconds`, default 15) is only a fallback for when that window cannot be created. Either way the change is followed by a short settle delay and then two passes, because Windows likes to restore its own cached wallpaper right after a topology change.
 
 ## Image naming
 
@@ -72,7 +72,7 @@ You can also run:
 
 One window: pick the image folder and the fit mode, see every attached monitor with the image it will get, pin a different image to any one of them, and turn the automatic behaviour on or off with a single switch. It refreshes itself when you dock or undock.
 
-It opens on `examples/wallpapers` the first time, and takes its light or dark appearance from Windows. The sun/crescent button in the top right switches between the two and remembers your choice; the `?` next to it explains exactly what the tool changes on your machine.
+It opens on `wallpapers` the first time, and takes its language and its light or dark appearance from Windows. It speaks French, English, German and Italian; the button showing the current code in the top right switches between them, and remembers your choice. The sun/crescent button in the top right switches between the two and remembers your choice; the `?` next to it explains exactly what the tool changes on your machine.
 
 Turning the switch on registers the logon task through `conhost --headless`, so no console window flashes when it starts. Windows builds older than 22621 fall back to the plain host, where a brief flash remains.
 
@@ -103,15 +103,24 @@ Parameters:
 
 | Parameter        | Default                            | Notes                                            |
 |------------------|------------------------------------|--------------------------------------------------|
-| `-WallpaperRoot` | `%USERPROFILE%\Pictures\Wallpapers`| image folder                                     |
+| `-WallpaperRoot` | `wallpapers` next to the script    | image folder                                     |
 | `-Position`      | `Fill`                             | `Center`, `Tile`, `Stretch`, `Fit`, `Fill`, `Span` |
-| `-PollSeconds`   | `3`                                | topology polling interval                        |
+| `-PollSeconds`   | `15`                               | fallback poll, used only when `WM_DISPLAYCHANGE` is unavailable |
 | `-SettleDelay`   | `2`                                | seconds to wait after a change before applying   |
+| `-Gui`           |                                    | open the graphical manager                       |
 | `-Once`          |                                    | apply once and exit                              |
 | `-Install`       |                                    | register the logon task                          |
 | `-Uninstall`     |                                    | remove the logon task                            |
 
 Log file: `%LOCALAPPDATA%\screen4screen\log.txt`.
+
+The module's state-changing functions support `-WhatIf`, so you can see what
+would be applied without touching anything:
+
+```powershell
+Import-Module .\Screen4Screen\Screen4Screen.psd1
+Set-WallpapersNow -Root .\wallpapers -PositionName Fill -WhatIf
+```
 
 ## Before you start
 
@@ -127,7 +136,8 @@ powershell -ExecutionPolicy Bypass -File .\screen4screen.ps1 -Once
 
 - Reaction is event-driven: a hidden window catches `WM_DISPLAYCHANGE` and the watcher wakes immediately, then waits `SettleDelay` for Windows to finish rearranging. `PollSeconds` (default 15) is only a fallback for the case where that window cannot be created.
 - The `-Position` mode is global; Windows does not expose per-monitor fit.
-- `powershell.exe -WindowStyle Hidden` may flash a console window for a fraction of a second at logon. A `.vbs` or `conhost --headless` launcher avoids it; see roadmap.
+- The logon task runs through `conhost --headless`, so nothing flashes at logon. Windows builds older than 22621 do not have it and fall back to the plain host, where a brief console flash remains.
+- `-ExecutionPolicy Bypass` is a Process-scope setting, so it loses to an execution policy set by Group Policy. On a managed machine where that is in force the window will not start; it now says so rather than failing silently.
 
 ## Roadmap
 

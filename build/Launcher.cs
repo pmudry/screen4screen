@@ -19,11 +19,49 @@ using System.Windows.Forms;
 
 internal static class Launcher
 {
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr FindWindow(string className, string windowName);
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    private enum Outcome { Shown, Exited, TimedOut }
+
+    // Owned by the process we started, on screen, and with a title. Matching
+    // on the title alone used to be enough to fool: an Explorer window open on
+    // a folder called screen4screen -- exactly what someone who has just
+    // cloned the repository is looking at -- carries that title, and the
+    // splash closed on its first tick. The notifier's own hidden window
+    // belongs to the same process but is never shown, so it cannot match.
+    private static bool HasVisibleWindow(int processId)
+    {
+        bool found = false;
+
+        EnumWindowsProc callback = delegate(IntPtr hWnd, IntPtr lParam)
+        {
+            uint owner;
+            GetWindowThreadProcessId(hWnd, out owner);
+
+            if (owner == (uint) processId && IsWindowVisible(hWnd) && GetWindowTextLength(hWnd) > 0)
+            {
+                found = true;
+                return false;   // stop enumerating
+            }
+            return true;
+        };
+
+        EnumWindows(callback, IntPtr.Zero);
+        GC.KeepAlive(callback);
+        return found;
+    }
 
     [STAThread]
     private static int Main()
@@ -41,6 +79,9 @@ internal static class Launcher
 
         // Windows PowerShell deliberately: the tool must not require PS 7.
         // -ExecutionPolicy Bypass because the machine policy may be AllSigned.
+        // Note that a Group Policy execution policy outranks this one, which
+        // is one of the ways the window can die quietly on a managed machine;
+        // the check below is what turns that into a message.
         string host = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.System),
             "WindowsPowerShell\\v1.0\\powershell.exe");
@@ -53,9 +94,14 @@ internal static class Launcher
         psi.UseShellExecute  = false;
         psi.CreateNoWindow   = true;
 
+        // The streams are deliberately not redirected. The child outlives this
+        // process, and a pipe whose reader has gone breaks the next write; the
+        // window reports its own troubles to the log instead.
+
+        Process child;
         try
         {
-            Process.Start(psi);
+            child = Process.Start(psi);
         }
         catch (Exception ex)
         {
@@ -65,8 +111,25 @@ internal static class Launcher
         }
 
         Application.EnableVisualStyles();
-        Application.Run(new Splash(Path.Combine(dir, "assets\\screen4screen.ico")));
-        return 0;
+        Splash splash = new Splash(Path.Combine(dir, "assets\\screen4screen.ico"), child);
+        Application.Run(splash);
+
+        if (splash.Result == Outcome.Shown) { return 0; }
+
+        // Process.Start only fails when powershell.exe itself cannot be
+        // created; everything that goes wrong afterwards used to end with the
+        // splash quietly fading and an exit code of 0.
+        string detail = splash.Result == Outcome.Exited
+            ? "PowerShell stopped (exit code " + child.ExitCode + ") before the window appeared."
+            : "The window did not appear within 15 seconds.";
+
+        MessageBox.Show(
+            detail + "\n\nThe details are in:\n" +
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                         "screen4screen\\log.txt"),
+            "screen4screen", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+        return 1;
     }
 
     // Shown immediately and closed as soon as the real window is up. Without
@@ -74,10 +137,17 @@ internal static class Launcher
     private sealed class Splash : Form
     {
         private readonly Timer _timer;
+        private readonly Process _child;
         private int _elapsedMs;
+        private int _graceMs;
 
-        public Splash(string iconPath)
+        public Outcome Result { get; private set; }
+
+        public Splash(string iconPath, Process child)
         {
+            _child = child;
+            Result = Outcome.TimedOut;
+
             FormBorderStyle = FormBorderStyle.None;
             StartPosition   = FormStartPosition.CenterScreen;
             ShowInTaskbar   = false;
@@ -121,16 +191,28 @@ internal static class Launcher
         {
             _elapsedMs += _timer.Interval;
 
-            IntPtr window = FindWindow(null, "screen4screen");
-            bool up = window != IntPtr.Zero && IsWindowVisible(window);
+            if (HasVisibleWindow(_child.Id)) { Finish(Outcome.Shown); return; }
+
+            // A moment's grace: the window can be up a tick before the process
+            // is seen to be alive, and an exiting host still has its error to
+            // finish writing to the log.
+            if (_child.HasExited)
+            {
+                _graceMs += _timer.Interval;
+                if (_graceMs >= 500) { Finish(Outcome.Exited); }
+                return;
+            }
 
             // The timeout is a safety net: if the window never appears, this
             // must not sit on screen forever.
-            if (up || _elapsedMs > 15000)
-            {
-                _timer.Stop();
-                Close();
-            }
+            if (_elapsedMs > 15000) { Finish(Outcome.TimedOut); }
+        }
+
+        private void Finish(Outcome outcome)
+        {
+            Result = outcome;
+            _timer.Stop();
+            Close();
         }
     }
 }

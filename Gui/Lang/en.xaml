@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English strings for the screen4screen window.
+
+     Every user-facing string lives in one of these files, never in the code.
+     The window merges the chosen one into its resources and refers to each
+     string with {DynamicResource}, so switching language re-renders the
+     window in place. Keep the keys identical across all four files: the
+     window falls back to English for a key that is missing.
+
+     UTF-8, and the XML declaration above says so, which is why accented text
+     is safe here and not in the .ps1 files. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <sys:String x:Key="S_Applying">Applying...</sys:String>
+  <sys:String x:Key="S_Applied">{0} screen(s) updated.</sys:String>
+  <sys:String x:Key="S_AppliedPartial">{0} of {1} screen(s) updated. See the log for details.</sys:String>
+  <sys:String x:Key="S_Saved">Settings saved.</sys:String>
+  <sys:String x:Key="S_TopologyChanged">Your screens changed; the list is up to date.</sys:String>
+  <sys:String x:Key="S_TopologyChangedIdle">Your screens changed. Click “Apply now”.</sys:String>
+  <sys:String x:Key="S_FolderMissing">That folder does not exist.</sys:String>
+  <sys:String x:Key="S_NoDisplay">No screen detected. Try “Refresh”.</sys:String>
+  <sys:String x:Key="S_AutoOn">On: your wallpapers will follow your screens.</sys:String>
+  <sys:String x:Key="S_AutoOff">Off: wallpapers will no longer change on their own.</sys:String>
+  <sys:String x:Key="S_AutoPaused">Paused: it will resume the next time you sign in.</sys:String>
+  <sys:String x:Key="S_AutoFailed">This setting could not be changed. See the log for details.</sys:String>
+  <sys:String x:Key="S_Error">Something went wrong. See the log for details.</sys:String>
+  <sys:String x:Key="S_PickTitle">Choose an image for this screen</sys:String>
+  <sys:String x:Key="S_BrowseTitle">Choose the folder that holds your images.</sys:String>
+  <sys:String x:Key="S_SourceAuto">(chosen automatically)</sys:String>
+  <sys:String x:Key="S_SourceManual">(your choice)</sys:String>
+  <sys:String x:Key="S_NoImage">No image matches this screen.</sys:String>
+  <sys:String x:Key="S_NoThumb">No preview available for this image format.</sys:String>
+  <sys:String x:Key="S_NotMatched">Windows cannot tell this screen apart; the image will be applied everywhere.</sys:String>
+  <sys:String x:Key="S_PickLabel">Choose an image...</sys:String>
+  <sys:String x:Key="S_ChangeLabel">Change...</sys:String>
+  <sys:String x:Key="S_LoadingPreviews">Loading previews...</sys:String>
+  <sys:String x:Key="S_Working">One moment...</sys:String>
+  <sys:String x:Key="S_ThemeToDark">Switch to the dark appearance</sys:String>
+  <sys:String x:Key="S_ThemeToLight">Switch to the light appearance</sys:String>
+  <sys:String x:Key="S_Tagline">A background image to suit every screen resolution</sys:String>
+  <sys:String x:Key="S_FolderLabel">Image folder</sys:String>
+  <sys:String x:Key="S_BrowseLabel">Browse...</sys:String>
+  <sys:String x:Key="S_PositionLabel">How the image sits</sys:String>
+  <sys:String x:Key="S_PosFill">Filled (cropped if needed)</sys:String>
+  <sys:String x:Key="S_PosFit">Whole image (bars at the sides)</sys:String>
+  <sys:String x:Key="S_PosStretch">Stretched to fill</sys:String>
+  <sys:String x:Key="S_PosCenter">Centred, actual size</sys:String>
+  <sys:String x:Key="S_PosTile">Tiled</sys:String>
+  <sys:String x:Key="S_PosSpan">One image across every screen</sys:String>
+  <sys:String x:Key="S_RefreshLabel">Refresh</sys:String>
+  <sys:String x:Key="S_ScreensHeading">Your screens</sys:String>
+  <sys:String x:Key="S_PrimaryBadge">Main screen</sys:String>
+  <sys:String x:Key="S_AutoLabel">Back to automatic</sys:String>
+  <sys:String x:Key="S_AutoToggle">Change the wallpapers automatically</sys:String>
+  <sys:String x:Key="S_AutoToggleTip">When this is on, the wallpapers put themselves back as soon as you plug in, unplug or change a screen, including after a restart.</sys:String>
+  <sys:String x:Key="S_ApplyLabel">Apply now</sys:String>
+  <sys:String x:Key="S_LogLabel">View the log</sys:String>
+  <sys:String x:Key="S_LogTip">Opens the text file where the tool notes what it does.</sys:String>
+  <sys:String x:Key="S_ThemeName">Change the appearance</sys:String>
+  <sys:String x:Key="S_AboutName">About screen4screen</sys:String>
+  <sys:String x:Key="S_AboutTip">What this program does on your computer</sys:String>
+  <sys:String x:Key="S_LangName">Change the language</sys:String>
+  <sys:String x:Key="S_LangTip">Choose the language of this window</sys:String>
+  <sys:String x:Key="S_AboutTitle">What this program does</sys:String>
+  <sys:String x:Key="S_AboutIntro">Each screen gets an image made for its resolution, and the wallpapers put themselves back when you change screens.</sys:String>
+  <sys:String x:Key="S_AboutChangesHeading">What it changes</sys:String>
+  <sys:String x:Key="S_AboutChanges1">Your wallpaper, and nothing else in your display settings.</sys:String>
+  <sys:String x:Key="S_AboutChanges2">With automatic changing on: a scheduled task named screen4screen, started when you sign in, under your account and without administrator rights. Turning it off removes it.</sys:String>
+  <sys:String x:Key="S_AboutFilesIntro">Three files, all of them safe to delete:</sys:String>
+  <sys:String x:Key="S_AboutFile3">wallpapers.json, in your image folder</sys:String>
+  <sys:String x:Key="S_AboutNotHeading">What it does not do</sys:String>
+  <sys:String x:Key="S_AboutNot1">No connection to the internet, no data sent.</sys:String>
+  <sys:String x:Key="S_AboutNot2">Your images are only read, never changed or moved.</sys:String>
+  <sys:String x:Key="S_AboutNot3">Nothing is installed, and nothing is written outside your account.</sys:String>
+  <sys:String x:Key="S_AboutSpotlightHeading">If the wallpapers come back on their own</sys:String>
+  <sys:String x:Key="S_AboutSpotlight">Turn off Windows Spotlight and the slideshow in Settings, Personalisation, Background.</sys:String>
+  <sys:String x:Key="S_ShowTaskLabel">Show the task in Windows</sys:String>
+  <sys:String x:Key="S_ShowTaskTip">Opens the Windows Task Scheduler, where the screen4screen task can be inspected or removed by hand.</sys:String>
+  <sys:String x:Key="S_GithubTip">Open the project page in your browser</sys:String>
+  <sys:String x:Key="S_CloseLabel">Close</sys:String>
+  <sys:String x:Key="S_Version">Version {0}</sys:String>
+
+</ResourceDictionary>

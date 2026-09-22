@@ -38,11 +38,21 @@ $source = Join-Path $PSScriptRoot 'Launcher.cs'
 $icon   = Join-Path $root 'assets\screen4screen.ico'
 $out    = Join-Path $root 'screen4screen.exe'
 
+# Missing inputs used to be dropped by the Where-Object below, which could
+# report "already up to date" for an .exe that would no longer build at all.
+foreach ($needed in $source, $icon) {
+    if (-not (Test-Path -LiteralPath $needed -PathType Leaf)) {
+        throw ("Missing build input: {0}" -f $needed)
+    }
+}
+
 if (-not $Force -and (Test-Path -LiteralPath $out -PathType Leaf)) {
     $built  = (Get-Item -LiteralPath $out).LastWriteTimeUtc
-    # No @() around this: it would make $newest an array and the
-    # comparison below would fail to convert it to a date.
-    $newest = $source, $icon |
+    # No @() around this: it would make $newest an array and the comparison
+    # below would fail to convert it to a date. This script is in the list
+    # because the compiler flags live here, so changing them has to trigger a
+    # rebuild just as changing the source does.
+    $newest = $source, $icon, $PSCommandPath |
               Where-Object { Test-Path -LiteralPath $_ } |
               ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc } |
               Sort-Object -Descending |
@@ -63,6 +73,15 @@ if (-not $Force -and (Test-Path -LiteralPath $out -PathType Leaf)) {
        /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll `
        $source
 
-if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
+if ($LASTEXITCODE -ne 0) {
+    # CS0016 here almost always means the .exe is running: csc cannot write
+    # over a loaded image, and the message does not say so.
+    if (Get-Process -Name 'screen4screen' -ErrorAction SilentlyContinue) {
+        throw 'Compilation failed: screen4screen.exe is running. Close it and try again.'
+    }
+    throw 'Compilation failed.'
+}
+
+if (-not (Test-Path -LiteralPath $out -PathType Leaf)) { throw 'The compiler reported success but wrote nothing.' }
 
 Write-Host ("Built {0}" -f $out) -ForegroundColor Green

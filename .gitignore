@@ -1,9 +1,10 @@
-# Local test images: only the three ISC sample backgrounds are tracked
-examples/wallpapers/*
-!examples/wallpapers/README.md
-!examples/wallpapers/5120x2160.webp
-!examples/wallpapers/ratio-16x9.webp
-!examples/wallpapers/default.webp
+# The default image folder. Only the three ISC sample backgrounds are
+# tracked; anything you drop in here stays yours.
+wallpapers/*
+!wallpapers/README.md
+!wallpapers/5120x2160.webp
+!wallpapers/ratio-16x9.webp
+!wallpapers/default.webp
 
 # Per-user manual monitor assignments, written next to the images
 wallpapers.json

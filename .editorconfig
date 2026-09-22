@@ -10,6 +10,11 @@ indent_size = 4
 [*.{ps1,psm1,psd1}]
 end_of_line = crlf
 
+# .gitattributes stores these with CRLF too; without this an editor on WSL
+# would write LF into the working tree.
+[*.{cs,cmd}]
+end_of_line = crlf
+
 [*.xaml]
 indent_size = 2
 end_of_line = crlf
@@ -17,3 +22,5 @@ end_of_line = crlf
 [*.md]
 indent_size = 2
 end_of_line = lf
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false

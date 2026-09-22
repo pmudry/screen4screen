@@ -38,7 +38,9 @@
         3440x1440 -> ratio-43x18
 
 .PARAMETER WallpaperRoot
-    Folder holding the images. Default: %USERPROFILE%\Pictures\Wallpapers
+    Folder holding the images. Defaults to the 'wallpapers' folder next to
+    this script, which ships with three samples, so a fresh clone works with
+    no argument at all. The window opens on the same folder.
 
 .PARAMETER Position
     Global fit mode: Center, Tile, Stretch, Fit, Fill, Span. Default: Fill.
@@ -66,7 +68,7 @@
     layout. Default: 2 seconds.
 
 .EXAMPLE
-    # Test: show what is detected and apply once
+    # Test: show what is detected and apply once, from the shipped folder
     .\screen4screen.ps1 -Once -Verbose
 
 .EXAMPLE
@@ -83,7 +85,10 @@
 
 [CmdletBinding()]
 param(
-    [string] $WallpaperRoot = (Join-Path $env:USERPROFILE 'Pictures\Wallpapers'),
+    # No default here: $PSScriptRoot is still empty while parameter defaults
+    # are being evaluated, and Join-Path refuses an empty Path, which killed
+    # the process before the script body ever ran. Filled in below instead.
+    [string] $WallpaperRoot,
 
     [ValidateSet('Center', 'Tile', 'Stretch', 'Fit', 'Fill', 'Span')]
     [string] $Position = 'Fill',
@@ -102,6 +107,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# The folder shipped next to this script, which is what the window opens on
+# too. $PSScriptRoot is populated by the time the body runs.
+if (-not $WallpaperRoot) { $WallpaperRoot = Join-Path $PSScriptRoot 'wallpapers' }
 
 $manifest = Join-Path $PSScriptRoot 'Screen4Screen\Screen4Screen.psd1'
 if (Test-Path -LiteralPath $manifest) {

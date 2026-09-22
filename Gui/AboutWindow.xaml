@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Ce que fait ce programme"
+        Title="{DynamicResource S_AboutTitle}"
         Width="560" Height="520" MinWidth="460" MinHeight="380"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontFamily="Segoe UI" FontSize="13"
@@ -164,29 +164,29 @@
 
         <TextBlock Text="screen4screen" FontSize="20" FontWeight="SemiBold"/>
         <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource SubtleBrush}"
-                   Text="Chaque écran reçoit une image faite pour sa résolution, et les fonds se remettent en place quand vous changez d'écran."/>
+                   Text="{DynamicResource S_AboutIntro}"/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Ce qu'il modifie"/>
-        <TextBlock Style="{StaticResource Item}" Text="Votre fond d'écran, et rien d'autre dans vos réglages d'affichage."/>
-        <TextBlock Style="{StaticResource Item}" Text="Avec le changement automatique activé : une tâche planifiée nommée screen4screen, lancée à votre ouverture de session, sous votre compte et sans droits administrateur. La désactiver la supprime."/>
-        <TextBlock Style="{StaticResource Item}" Text="Trois fichiers, tous supprimables :"/>
+        <TextBlock Style="{StaticResource H2}" Text="{DynamicResource S_AboutChangesHeading}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutChanges1}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutChanges2}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutFilesIntro}"/>
         <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\screen4screen\log.txt"/>
         <TextBlock Style="{StaticResource Path2}" Text="%LOCALAPPDATA%\screen4screen\gui-settings.json"/>
-        <TextBlock Style="{StaticResource Path2}" Text="wallpapers.json, dans votre dossier d'images"/>
+        <TextBlock Style="{StaticResource Path2}" Text="{DynamicResource S_AboutFile3}"/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Ce qu'il ne fait pas"/>
-        <TextBlock Style="{StaticResource Item}" Text="Aucune connexion à Internet, aucune donnée envoyée."/>
-        <TextBlock Style="{StaticResource Item}" Text="Vos images sont seulement lues, jamais modifiées ni déplacées."/>
-        <TextBlock Style="{StaticResource Item}" Text="Rien n'est installé, et rien n'est écrit hors de votre compte."/>
+        <TextBlock Style="{StaticResource H2}" Text="{DynamicResource S_AboutNotHeading}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutNot1}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutNot2}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutNot3}"/>
 
-        <TextBlock Style="{StaticResource H2}" Text="Si les fonds reviennent tout seuls"/>
-        <TextBlock Style="{StaticResource Item}" Text="Désactivez Windows Spotlight et le diaporama dans Paramètres, Personnalisation, Arrière-plan."/>
+        <TextBlock Style="{StaticResource H2}" Text="{DynamicResource S_AboutSpotlightHeading}"/>
+        <TextBlock Style="{StaticResource Item}" Text="{DynamicResource S_AboutSpotlight}"/>
 
         <TextBlock x:Name="TxtVersion" Margin="0,20,0,0" FontSize="12"
                    Foreground="{DynamicResource SubtleBrush}"/>
 
         <Button x:Name="BtnGithub" Style="{StaticResource LinkRow}" Margin="0,6,0,0"
-                ToolTip="Ouvrir la page du projet dans votre navigateur">
+                ToolTip="{DynamicResource S_GithubTip}">
           <StackPanel Orientation="Horizontal">
             <Viewbox Width="15" Height="15" VerticalAlignment="Center">
               <Canvas Width="16" Height="16">
@@ -204,7 +204,7 @@
     </ScrollViewer>
 
     <Border Grid.Row="2" Padding="24,14">
-      <Button x:Name="BtnClose" Content="Fermer" HorizontalAlignment="Right" IsDefault="True"/>
+      <Button x:Name="BtnClose" Content="{DynamicResource S_CloseLabel}" HorizontalAlignment="Right" IsDefault="True"/>
     </Border>
   </Grid>
 </Window>
