@@ -39,6 +39,8 @@
     <sys:String x:Key="S_AboutTip">Ce que ce programme fait sur votre ordinateur</sys:String>
     <sys:String x:Key="S_ThemeTip">Bascule entre l'apparence claire et l'apparence sombre. Au premier lancement, celle de Windows est reprise.</sys:String>
     <sys:String x:Key="S_ChangeLabel">Changer...</sys:String>
+    <sys:String x:Key="S_LoadingPreviews">Chargement des aperçus...</sys:String>
+    <sys:String x:Key="S_Working">Un instant...</sys:String>
 
     <!-- Light values. Show-Screen4ScreenGui.ps1 replaces every one of these when
          Windows is in dark mode, which is why nothing below uses
@@ -58,6 +60,7 @@
     <SolidColorBrush x:Key="FabBrush"         Color="#FFFFFF"/>
     <SolidColorBrush x:Key="FabEdgeBrush"     Color="#D9DCE0"/>
     <SolidColorBrush x:Key="FabIconBrush"     Color="#1A1C1E"/>
+    <SolidColorBrush x:Key="PopupBrush"       Color="#FFFFFF"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -270,12 +273,16 @@
               <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
                      VerticalOffset="4" AllowsTransparency="True" PopupAnimation="Fade"
                      IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
-                <Border CornerRadius="6" Padding="0,4"
+                <Border CornerRadius="6" Padding="0,4" Margin="6"
                         Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                         MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                        Background="{DynamicResource SurfaceBrush}"
+                        Background="{DynamicResource PopupBrush}"
                         BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
-                  <ScrollViewer>
+                  <Border.Effect>
+                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270"
+                                      Opacity="0.28" Color="#000000"/>
+                  </Border.Effect>
+                  <ScrollViewer Background="Transparent">
                     <ItemsPresenter/>
                   </ScrollViewer>
                 </Border>
@@ -408,10 +415,15 @@
             <ColumnDefinition Width="*"/>
           </Grid.ColumnDefinitions>
 
-          <Border Grid.Column="0" Width="128" Height="54" CornerRadius="3"
-                  Background="{DynamicResource ThumbBrush}" ClipToBounds="True">
-            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
-          </Border>
+          <!-- Fixed 150x54 slot so every row lines up, with the preview
+               itself drawn at the screen's own proportions inside it. -->
+          <Grid Grid.Column="0" Width="150" Height="54" VerticalAlignment="Top">
+            <Border Width="{Binding ThumbWidth}" Height="{Binding ThumbHeight}"
+                    CornerRadius="3" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource ThumbBrush}" ClipToBounds="True">
+              <Image Source="{Binding Thumbnail}" Stretch="Fill"/>
+            </Border>
+          </Grid>
 
           <StackPanel Grid.Column="1" Margin="14,0,0,0">
             <StackPanel Orientation="Horizontal">

@@ -64,6 +64,8 @@ namespace WallByResGui
         public string BadgeVisibility    { get; set; }
         public string ProblemVisibility  { get; set; }
         public string AutoVisibility     { get; set; }
+        public double ThumbWidth         { get; set; }
+        public double ThumbHeight        { get; set; }
         public object Thumbnail          { get; set; }
     }
 }
@@ -88,6 +90,7 @@ $script:State = @{
     TaskChecked  = 0
     Thumbs       = @{}
     Notifier     = $null
+    Deferred     = $null
     FallbackTick = 0
     Rows         = $null
     Loaded       = $false
@@ -179,6 +182,23 @@ function Set-Status {
     $script:Ui.TxtStatus.Text = $text
 }
 
+function Invoke-Deferred {
+    # A click that runs a second of work inline looks frozen: the status text
+    # and the disabled button never get painted. Hand the work to a one-shot
+    # timer so the UI renders first, then blocks.
+    param([scriptblock] $Body)
+
+    $script:State.Deferred = $Body
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(30)
+    $timer.Add_Tick({
+        $this.Stop()
+        Invoke-Guarded { & $script:State.Deferred }
+    })
+    $timer.Start()
+}
+
 function Invoke-Guarded {
     # No Application object means no DispatcherUnhandledException hook, so an
     # exception escaping a handler would kill the window with no message.
@@ -221,7 +241,7 @@ $script:Palette = @{
         @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
         @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD'),
         @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#FFD9DCE0'),
-        @('FabIconBrush',  '#FF1A1C1E')
+        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FFFFFFFF')
     )
     Dark = @(
         @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',     '#FF24272B'),
@@ -231,7 +251,7 @@ $script:Palette = @{
         @('ThumbBrush',    '#FF2E3236'), @('HoverBrush',       '#FF2E3236'),
         @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057'),
         @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#00000000'),
-        @('FabIconBrush',  '#FF1A1C1E')
+        @('FabIconBrush',  '#FF1A1C1E'), @('PopupBrush',       '#FF1F2226')
     )
 }
 
@@ -384,6 +404,22 @@ function Update-DisplayList {
         $row.Friendly         = $p.Friendly
         $row.DevicePath       = $p.DevicePath
         $row.ResolutionText   = '{0} x {1}' -f $p.Width, $p.Height
+
+        # The preview box carries the screen's own aspect ratio: a 16:9 panel
+        # must look 16:9, not be cropped into an ultrawide slot. The box is
+        # bounded by 150x54 and the ratio is never distorted to fit; for an
+        # ultrawide the width hits the bound first and the height follows.
+        $boxW = 96.0
+        $boxH = 54.0
+        if ($p.Width -gt 0 -and $p.Height -gt 0) {
+            $boxW = 54.0 * $p.Width / $p.Height
+            if ($boxW -gt 150.0) {
+                $boxW = 150.0
+                $boxH = 150.0 * $p.Height / $p.Width
+            }
+        }
+        $row.ThumbWidth       = [Math]::Round($boxW)
+        $row.ThumbHeight      = [Math]::Round($boxH)
         $row.BadgeVisibility  = if ($p.IsPrimary) { 'Visible' } else { 'Collapsed' }
         $row.ImagePath        = $p.Image
         $row.ProblemText      = ''
@@ -553,6 +589,9 @@ function Start-DeferredLoad {
         Invoke-Guarded {
             Update-DisplayList
             Update-AutoState
+            if ($script:Ui.TxtStatus.Text -eq (Get-Text 'S_LoadingPreviews')) {
+                $script:Ui.TxtStatus.Text = ''
+            }
         }
     })
     $timer.Start()
@@ -674,7 +713,13 @@ $ui.BtnTheme.Add_Click({
 })
 
 $ui.BtnRefresh.Add_Click({ Invoke-Guarded { Update-DisplayList; Update-AutoState } })
-$ui.BtnApply.Add_Click({   Invoke-Guarded { Invoke-ApplyNow } })
+$ui.BtnApply.Add_Click({
+    Invoke-Guarded {
+        $script:Ui.BtnApply.IsEnabled = $false
+        Set-Status 'S_Applying'
+        Invoke-Deferred { Invoke-ApplyNow }
+    }
+})
 
 $ui.BtnLog.Add_Click({
     Invoke-Guarded {
@@ -686,12 +731,20 @@ $ui.BtnLog.Add_Click({
 $ui.TglAuto.Add_Click({
     Invoke-Guarded {
         $wanted = [bool] $script:Ui.TglAuto.IsChecked
-        try { Set-AutoMode -Enabled $wanted }
-        catch {
-            $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoFailed'
-            Update-AutoState
-            throw
-        }
+        $script:Ui.TglAuto.IsEnabled = $false
+        Set-Status 'S_Working'
+
+        Invoke-Deferred {
+            try { Set-AutoMode -Enabled $wanted }
+            catch {
+                $script:Ui.TxtAutoState.Text = Get-Text 'S_AutoFailed'
+                Update-AutoState
+            }
+            finally {
+                $script:Ui.TglAuto.IsEnabled = $true
+                $script:Ui.TxtStatus.Text = ''
+            }
+        }.GetNewClosure()
     }
 })
 
@@ -714,6 +767,7 @@ $window.Add_Loaded({
         Update-DisplayList -SkipThumbnails
         $script:State.Loaded = $true
         $timer.Start()
+        Set-Status 'S_LoadingPreviews'
         Start-DeferredLoad
     }
 })

@@ -247,8 +247,9 @@ namespace WallByRes
     // of .NET Core at all.
     public class DisplayNotifier : IDisposable
     {
-        private const int WM_DISPLAYCHANGE = 0x007E;
-        private const int WM_DESTROY       = 0x0002;
+        private const int WM_DISPLAYCHANGE  = 0x007E;
+        private const int WM_DESTROY        = 0x0002;
+        private const int WS_EX_TOOLWINDOW  = 0x00000080;
 
         private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -348,8 +349,11 @@ namespace WallByRes
 
             // A real top-level window, deliberately: HWND_MESSAGE windows are
             // excluded from broadcasts, and WM_DISPLAYCHANGE is a broadcast.
-            // It is never shown, so it costs nothing on screen.
-            _hwnd = CreateWindowEx(0, className, "screen4screen", 0,
+            // It is never shown, so it costs nothing on screen. WS_EX_TOOLWINDOW
+            // keeps it out of Alt-Tab and the taskbar regardless, and the title
+            // differs from the real window so lookups cannot confuse the two.
+            _hwnd = CreateWindowEx(WS_EX_TOOLWINDOW, className,
+                                   "screen4screen display sink", 0,
                                    0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 
             _ready.Set();
@@ -1003,10 +1007,15 @@ function Start-WallpaperWatch {
     .SYNOPSIS
         Watches the display topology and re-applies on every change. Blocks.
     .DESCRIPTION
-        Polls rather than using SystemEvents.DisplaySettingsChanged, which
-        needs a message pump. Two passes separated by a few seconds, because
-        Windows restores its own transcoded wallpaper cache shortly after a
-        topology change and the first pass is often overwritten.
+        Wakes on the WM_DISPLAYCHANGE message through DisplayNotifier, so a
+        dock or undock is picked up at once. PollSeconds is only a ceiling on
+        how long the wait may block, so the topology is still re-checked every
+        so often even if no message arrives, and it becomes the sole trigger
+        if the notifier window cannot be created.
+
+        Two passes separated by a few seconds, because Windows restores its own
+        transcoded wallpaper cache shortly after a topology change and the
+        first pass is often overwritten.
     #>
     [CmdletBinding()]
     param(
@@ -1031,40 +1040,40 @@ function Start-WallpaperWatch {
     $lastSignature = $null
 
     try {
-    while ($true) {
-        try {
-            $signature = Get-DisplaySignature
-
-            if ($signature -ne $lastSignature) {
-
-                if ($null -ne $lastSignature) {
-                    Write-Log 'Display configuration change detected.'
-                }
-
-                # Let Windows finish rearranging the desktop.
-                Start-Sleep -Seconds $SettleDelay
+        while ($true) {
+            try {
                 $signature = Get-DisplaySignature
 
-                Set-WallpapersNow -Root $Root -PositionName $PositionName | Out-Null
+                if ($signature -ne $lastSignature) {
 
-                # Windows often restores its own cached wallpaper right after a
-                # display change; a second pass takes it back.
-                Start-Sleep -Seconds 3
-                Set-WallpapersNow -Root $Root -PositionName $PositionName | Out-Null
+                    if ($null -ne $lastSignature) {
+                        Write-Log 'Display configuration change detected.'
+                    }
 
-                $lastSignature = $signature
+                    # Let Windows finish rearranging the desktop.
+                    Start-Sleep -Seconds $SettleDelay
+                    $signature = Get-DisplaySignature
+
+                    Set-WallpapersNow -Root $Root -PositionName $PositionName | Out-Null
+
+                    # Windows often restores its own cached wallpaper right after a
+                    # display change; a second pass takes it back.
+                    Start-Sleep -Seconds 3
+                    Set-WallpapersNow -Root $Root -PositionName $PositionName | Out-Null
+
+                    $lastSignature = $signature
+                }
             }
-        }
-        catch {
-            Write-Log ("Loop: {0}" -f $_.Exception.Message) 'ERROR'
-            Start-Sleep -Seconds 10
-        }
+            catch {
+                Write-Log ("Loop: {0}" -f $_.Exception.Message) 'ERROR'
+                Start-Sleep -Seconds 10
+            }
 
-        # Wakes the instant Windows reports a change, and otherwise after the
-        # fallback interval.
-        if ($notifier) { [void] $notifier.Wait($PollSeconds * 1000) }
-        else           { Start-Sleep -Seconds $PollSeconds }
-    }
+            # Wakes the instant Windows reports a change, and otherwise after the
+            # fallback interval.
+            if ($notifier) { [void] $notifier.Wait($PollSeconds * 1000) }
+            else           { Start-Sleep -Seconds $PollSeconds }
+        }
     }
     finally {
         if ($notifier) { $notifier.Dispose() }
