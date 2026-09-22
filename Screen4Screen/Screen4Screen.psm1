@@ -258,6 +258,42 @@ namespace WallByRes
 }
 '@
 
+    # Compiling this source at every start costs well over a second, which is
+    # most of the window's launch time. Cache the built assembly next to the
+    # log and load that instead. The file name carries a hash of the source,
+    # so editing the C# above simply produces a new one.
+    $dll = $null
+    try {
+        $sha  = [System.Security.Cryptography.SHA256]::Create()
+        $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($cs))
+        $sha.Dispose()
+        $hash = -join ($bytes[0..7] | ForEach-Object { $_.ToString('x2') })
+
+        if (-not (Test-Path -LiteralPath $script:LogDir)) {
+            New-Item -ItemType Directory -Path $script:LogDir -Force | Out-Null
+        }
+        $dll = Join-Path $script:LogDir ('WallByRes-{0}.dll' -f $hash)
+    }
+    catch { $dll = $null }
+
+    if ($dll -and (Test-Path -LiteralPath $dll -PathType Leaf)) {
+        try {
+            Add-Type -Path $dll -ErrorAction Stop
+            return
+        }
+        catch { }   # stale or unreadable: fall through and rebuild
+    }
+
+    if ($dll) {
+        try {
+            Add-Type -TypeDefinition $cs -Language CSharp `
+                     -OutputAssembly $dll -OutputType Library -ErrorAction Stop
+            if (-not ('WallByRes.Native' -as [type])) { Add-Type -Path $dll }
+            return
+        }
+        catch { }   # read-only profile, antivirus, whatever: compile in memory
+    }
+
     Add-Type -TypeDefinition $cs -Language CSharp
 }
 

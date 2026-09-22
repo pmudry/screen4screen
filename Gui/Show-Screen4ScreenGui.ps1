@@ -216,7 +216,8 @@ $script:Palette = @{
         @('AccentBrush',   '#FFB0296A'), @('OnAccentBrush',    '#FFFFFFFF'),
         @('ThumbBrush',    '#FFE8EAEC'), @('HoverBrush',       '#FFE8EAEC'),
         @('PressedBrush',  '#FFDCDFE3'), @('ScrollThumbBrush', '#FFC4C8CD'),
-        @('FabBrush',      '#FFECEEF0')
+        @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#FFD9DCE0'),
+        @('FabIconBrush',  '#FF1A1C1E')
     )
     Dark = @(
         @('WindowBrush',   '#FF1B1D20'), @('SurfaceBrush',     '#FF24272B'),
@@ -225,7 +226,8 @@ $script:Palette = @{
         @('AccentBrush',   '#FFE2ABBA'), @('OnAccentBrush',    '#FF1B1D20'),
         @('ThumbBrush',    '#FF2E3236'), @('HoverBrush',       '#FF2E3236'),
         @('PressedBrush',  '#FF3A3F45'), @('ScrollThumbBrush', '#FF4A5057'),
-        @('FabBrush',      '#FF2B3035')
+        @('FabBrush',      '#FFFFFFFF'), @('FabEdgeBrush',     '#00000000'),
+        @('FabIconBrush',  '#FF1A1C1E')
     )
 }
 
@@ -281,6 +283,17 @@ function Show-AboutWindow {
     Set-WindowPalette -Target $about -Dark $script:State.Dark
     Set-WindowIcon    -Target $about
     $about.Owner = $window
+
+    $version = $about.FindName('TxtVersion')
+    if ($version) {
+        $module = Get-Module Screen4Screen
+        if ($module) { $version.Text = 'Version ' + $module.Version.ToString() }
+    }
+
+    $github = $about.FindName('BtnGithub')
+    if ($github) {
+        $github.Add_Click({ Start-Process 'https://github.com/pmudry/screen4screen' })
+    }
 
     $close = $about.FindName('BtnClose')
     if ($close) {
@@ -341,6 +354,10 @@ function New-Thumbnail {
 #------------------------------------------------------------------------------
 
 function Update-DisplayList {
+    # Decoding the thumbnails costs several hundred milliseconds each, so the
+    # first pass runs without them and a deferred pass fills them in.
+    param([switch] $SkipThumbnails)
+
     $root = $script:State.Root
     $rows = New-Object System.Collections.ObjectModel.ObservableCollection[object]
 
@@ -375,8 +392,8 @@ function Update-DisplayList {
         if ($p.Image) {
             $row.ImageText  = (Split-Path $p.Image -Leaf) + '  '
             $row.SourceText = if ($isManual) { Get-Text 'S_SourceManual' } else { Get-Text 'S_SourceAuto' }
-            $row.Thumbnail  = New-Thumbnail -Path $p.Image
-            if ($null -eq $row.Thumbnail) {
+            if (-not $SkipThumbnails) { $row.Thumbnail = New-Thumbnail -Path $p.Image }
+            if (-not $SkipThumbnails -and $null -eq $row.Thumbnail) {
                 $row.ProblemText       = Get-Text 'S_NoThumb'
                 $row.ProblemVisibility = 'Visible'
             }
@@ -520,6 +537,23 @@ function Invoke-RowCommand {
 # Polling
 #------------------------------------------------------------------------------
 
+function Start-DeferredLoad {
+    # Get-ScheduledTask is a CIM call costing close to a second, and the
+    # thumbnails a few hundred milliseconds more. Both run once the window is
+    # already on screen, so it appears immediately instead of after two
+    # seconds of nothing.
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(60)
+    $timer.Add_Tick({
+        $this.Stop()
+        Invoke-Guarded {
+            Update-DisplayList
+            Update-AutoState
+        }
+    })
+    $timer.Start()
+}
+
 function Invoke-Tick {
     # Cheap: a handful of EnumDisplayDevices calls. Kept on the UI thread on
     # purpose; a worker runspace would be MTA and every IDesktopWallpaper call
@@ -581,6 +615,15 @@ $ui.BtnBrowse.Add_Click({
         if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             $script:Ui.TxtRoot.Text = $dialog.SelectedPath
         }
+    }
+})
+
+# WPF selects only the clicked line on a triple click, which on a one-line
+# box leaves the selection looking arbitrary. Select the whole path.
+$ui.TxtRoot.Add_PreviewMouseLeftButtonDown({
+    if ($args[1].ClickCount -eq 3) {
+        $script:Ui.TxtRoot.SelectAll()
+        $args[1].Handled = $true
     }
 })
 
@@ -652,11 +695,10 @@ $timer.Add_Tick({ Invoke-Guarded { Invoke-Tick } })
 $window.Add_Loaded({
     Invoke-Guarded {
         $script:State.Signature = Get-DisplaySignature
-        Update-DisplayList
-        Update-AutoState
-        Set-Status 'S_Ready'
+        Update-DisplayList -SkipThumbnails
         $script:State.Loaded = $true
         $timer.Start()
+        Start-DeferredLoad
     }
 })
 

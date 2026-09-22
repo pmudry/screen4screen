@@ -13,7 +13,6 @@
 
     <!-- Every user-facing string lives here. The .ps1 host is ASCII only,
          so it fetches these by key rather than embedding accented text. -->
-    <sys:String x:Key="S_Ready">Prêt.</sys:String>
     <sys:String x:Key="S_Applying">Application en cours...</sys:String>
     <sys:String x:Key="S_Applied">{0} écran(s) mis à jour.</sys:String>
     <sys:String x:Key="S_AppliedPartial">{0} écran(s) sur {1} mis à jour. Détails dans le journal.</sys:String>
@@ -56,7 +55,9 @@
     <SolidColorBrush x:Key="HoverBrush"       Color="#E8EAEC"/>
     <SolidColorBrush x:Key="PressedBrush"     Color="#DCDFE3"/>
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4C8CD"/>
-    <SolidColorBrush x:Key="FabBrush"         Color="#ECEEF0"/>
+    <SolidColorBrush x:Key="FabBrush"         Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="FabEdgeBrush"     Color="#D9DCE0"/>
+    <SolidColorBrush x:Key="FabIconBrush"     Color="#1A1C1E"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -147,8 +148,8 @@
          a soft shadow, and a lift on hover. WPF has no backdrop blur, so the
          glass effect is approximated with a flat translucent surface. -->
     <Style x:Key="IconButton" TargetType="Button">
-      <Setter Property="Width" Value="44"/>
-      <Setter Property="Height" Value="44"/>
+      <Setter Property="Width" Value="32"/>
+      <Setter Property="Height" Value="32"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Background" Value="{DynamicResource FabBrush}"/>
       <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
@@ -156,10 +157,11 @@
         <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Grid>
-              <Ellipse x:Name="Bd" Fill="{TemplateBinding Background}">
+              <Ellipse x:Name="Bd" Fill="{TemplateBinding Background}"
+                       Stroke="{DynamicResource FabEdgeBrush}" StrokeThickness="1">
                 <Ellipse.Effect>
-                  <DropShadowEffect BlurRadius="10" ShadowDepth="2" Direction="270"
-                                    Opacity="0.20" Color="#000000"/>
+                  <DropShadowEffect BlurRadius="8" ShadowDepth="1" Direction="270"
+                                    Opacity="0.22" Color="#000000"/>
                 </Ellipse.Effect>
               </Ellipse>
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -194,12 +196,13 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
       <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="Padding" Value="14,7"/>
-      <Setter Property="MinHeight" Value="36"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="Height" Value="36"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
-            <Border x:Name="Bd" CornerRadius="18"
+            <Border x:Name="Bd" CornerRadius="6"
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}">
@@ -249,7 +252,7 @@
 
     <Style TargetType="ComboBox">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-      <Setter Property="MinHeight" Value="36"/>
+      <Setter Property="Height" Value="36"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -413,6 +416,7 @@
           <StackPanel Grid.Column="1" Margin="14,0,0,0">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="{Binding Friendly}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource TextBrush}"
                          TextTrimming="CharacterEllipsis"/>
               <Border Background="{DynamicResource AccentBrush}" CornerRadius="3"
                       Padding="7,2" Margin="10,0,0,0"
@@ -426,8 +430,10 @@
                        Margin="0,2,0,0"/>
 
             <TextBlock Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextBrush}"
                        ToolTip="{Binding ImagePath}">
-              <Run Text="{Binding ImageText, Mode=OneWay}"/>
+              <Run Text="{Binding ImageText, Mode=OneWay}"
+                   Foreground="{DynamicResource TextBrush}"/>
               <Run Text="{Binding SourceText, Mode=OneWay}"
                    Foreground="{DynamicResource SubtleBrush}"/>
             </TextBlock>
@@ -475,30 +481,33 @@
       <Button DockPanel.Dock="Right" x:Name="BtnAbout" Margin="8,0,0,0"
               Style="{StaticResource IconButton}" VerticalAlignment="Top"
               ToolTip="{DynamicResource S_AboutTip}">
-        <Grid Width="20" Height="20">
-          <Ellipse Stroke="{DynamicResource SubtleBrush}" StrokeThickness="1.6"
-                   Width="18" Height="18"/>
-          <TextBlock Text="?" FontSize="12" FontWeight="SemiBold"
-                     Foreground="{DynamicResource SubtleBrush}"
-                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Grid>
+        <TextBlock Text="?" FontSize="14" FontWeight="SemiBold"
+                   Foreground="{DynamicResource FabIconBrush}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Button>
 
       <Button DockPanel.Dock="Right" x:Name="BtnTheme"
               Style="{StaticResource IconButton}" VerticalAlignment="Top"
               ToolTip="{DynamicResource S_ThemeTip}">
-        <Grid Width="20" Height="20">
-          <!-- Crescent shown while light: clicking goes dark. -->
-          <Path x:Name="IconMoon" Fill="{DynamicResource SubtleBrush}"
-                Data="M 13.8,2.6 A 8,8 0 1 0 13.8,17.4 A 6.4,6.4 0 1 1 13.8,2.6 Z"/>
-          <!-- Sun shown while dark: clicking goes light. -->
-          <Canvas x:Name="IconSun" Width="20" Height="20" Visibility="Collapsed">
-            <Ellipse Canvas.Left="6" Canvas.Top="6" Width="8" Height="8"
-                     Fill="{DynamicResource SubtleBrush}"/>
-            <Path Stroke="{DynamicResource SubtleBrush}" StrokeThickness="1.7"
-                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                  Data="M 10,0.6 L 10,3 M 10,17 L 10,19.4 M 0.6,10 L 3,10 M 17,10 L 19.4,10 M 3.3,3.3 L 5,5 M 15,15 L 16.7,16.7 M 3.3,16.7 L 5,15 M 15,5 L 16.7,3.3"/>
-          </Canvas>
+        <Grid>
+          <!-- Feather-style strokes on a 24x24 grid, the same shapes the ISC
+               sites use, scaled down by the Viewbox. -->
+          <Viewbox x:Name="IconMoon" Width="16" Height="16">
+            <Canvas Width="24" Height="24">
+              <Path Stroke="{DynamicResource FabIconBrush}" StrokeThickness="2"
+                    StrokeLineJoin="Round"
+                    Data="M21,12.79 A9,9 0 1,1 11.21,3 A7,7 0 0,0 21,12.79 Z"/>
+            </Canvas>
+          </Viewbox>
+          <Viewbox x:Name="IconSun" Width="16" Height="16" Visibility="Collapsed">
+            <Canvas Width="24" Height="24">
+              <Ellipse Canvas.Left="8" Canvas.Top="8" Width="8" Height="8"
+                       Stroke="{DynamicResource FabIconBrush}" StrokeThickness="2"/>
+              <Path Stroke="{DynamicResource FabIconBrush}" StrokeThickness="2"
+                    StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Data="M12,2 V4 M12,20 V22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 H4 M20,12 H22 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93"/>
+            </Canvas>
+          </Viewbox>
         </Grid>
       </Button>
       <StackPanel>
@@ -521,7 +530,8 @@
 
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Dossier des images"
                  VerticalAlignment="Center" Margin="0,0,12,0"/>
-      <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtRoot"/>
+      <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtRoot"
+                 VerticalAlignment="Center"/>
       <Button    Grid.Row="0" Grid.Column="2" x:Name="BtnBrowse" Content="Parcourir..."
                  Margin="8,0,0,0"/>
 

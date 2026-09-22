@@ -19,3 +19,6 @@ desktop.ini
 # Pester / analyzer output (future)
 TestResults/
 coverage.xml
+
+# Built launcher (run build/Build-Launcher.ps1 to produce it)
+screen4screen.exe

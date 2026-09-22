@@ -18,7 +18,12 @@ Layout:
   them in step with README.md.
 - `Gui/` - the WPF manager: `Show-Screen4ScreenGui.ps1` (ASCII host) plus
   `MainWindow.xaml` (UTF-8, holds every user-facing string).
-- `screen4screen.cmd` - double-clickable launcher, passes `-ExecutionPolicy Bypass`.
+- `screen4screen.cmd` - launcher needing no build, but it shows a console.
+- `build/` - `Launcher.cs` plus `Build-Launcher.ps1`, which compiles
+  `screen4screen.exe` with the .NET Framework compiler that ships with
+  Windows. `/target:winexe` is what removes the console for good, and
+  `/win32icon` is the only way to get an icon in Explorer. The `.exe` is
+  gitignored; build it after cloning.
 - `examples/wallpapers/` - three ISC sample backgrounds, named for the lookup.
 
 ## Design decisions, do not undo without a reason
@@ -88,6 +93,13 @@ Layout:
   image would keep showing old pixels. `.webp` has no WIC decoder on a stock
   Windows, so every thumbnail load is wrapped and degrades to a blank tile;
   applying a `.webp` wallpaper is unaffected, that path is Windows' own.
+- **The window paints before the two slow calls run.** `Get-ScheduledTask`
+  costs about 900 ms and decoding one 4.8 MB webp thumbnail about 650 ms,
+  which together were most of the launch time. Both now run from a one-shot
+  `DispatcherTimer` once the window is up, so it appears in roughly 1.2 s
+  instead of 2.2 s. Measure before moving work back into `Add_Loaded`.
+- The embedded C# is compiled once into a cached DLL under the data folder,
+  named after a hash of the source. Worth a little, not the bottleneck.
 - The window never re-applies on a topology change. That is the background
   task's job, and doing both would double-apply and flash.
 - **The scheduled task runs through `conhost.exe --headless`.** Passing

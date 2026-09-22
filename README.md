@@ -56,7 +56,15 @@ Reduced ratios for common panels:
 
 ## The graphical manager
 
-Double-click `screen4screen.cmd`, or run:
+Build the launcher once, then double-click `screen4screen.exe`:
+
+```powershell
+.\build\Build-Launcher.ps1
+```
+
+It carries the program icon in Explorer and opens the window with no console at all. The compiler it uses ships with Windows, so nothing needs installing, and the `.exe` is not tracked in git. `screen4screen.cmd` works without the build step but shows a console window.
+
+You can also run:
 
 ```powershell
 .\screen4screen.ps1 -Gui
