@@ -1,0 +1,15 @@
+# Local test images: keep the repo free of binaries
+examples/wallpapers/*
+!examples/wallpapers/README.md
+
+# PowerShell / editor leftovers
+*.log
+*.swp
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Pester / analyzer output (future)
+TestResults/
+coverage.xml
