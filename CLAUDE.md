@@ -148,6 +148,14 @@ Layout:
   The `ComboBox` template ignores `Padding` entirely and hardcodes
   `Margin="15,0,32,0"` on its `ContentPresenter`, which is the number the
   text box has to match.
+- **When rendering a window offscreen, paint the background yourself.**
+  Moving `Window.Content` into a `Border` leaves `Window.Background` behind, so
+  every glyph that is not sitting on a card anti-aliases against transparency
+  and comes out pale. It looks exactly like a colour bug and is not one: the
+  title, the field labels and the section headings all read as grey while the
+  text inside the cards stays solid. Set the host's `Background` from
+  `WindowBrush` before measuring. Two rounds of chasing a defect that was only
+  ever in the harness.
 - **The window can be measured and rendered without ever being shown**, which
   is the only way to check alignment from a machine that cannot open it: move
   `Window.Content` into a `Border`, carry `Window.Resources` across or every

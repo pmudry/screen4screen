@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="screen4screen"
-        Width="820" Height="640" MinWidth="680" MinHeight="520"
+        Width="860" Height="700" MinWidth="700" MinHeight="540"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" FontSize="13"
         UseLayoutRounding="True"
@@ -443,16 +443,19 @@
       <Border Margin="0,0,0,8" Padding="12" CornerRadius="5"
               Background="{DynamicResource SurfaceBrush}"
               BorderBrush="{DynamicResource BorderBrush2}" BorderThickness="1">
+        <!-- Three columns: preview, what the screen is getting, and what you
+             can do about it. The actions used to sit under the text, which
+             made every row about 250px tall and put the list into a scrollbar
+             at two monitors. Beside it, a row is the height of its preview. -->
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
 
           <!-- Fixed 150x54 slot so every row lines up, with the preview
                itself drawn at the screen's own proportions inside it. -->
-          <!-- Centred vertically: the action button sits under the text, so a
-               top-aligned preview reads as misaligned against the card. -->
           <Grid Grid.Column="0" Width="150" Height="54" VerticalAlignment="Center">
             <Border Width="{Binding ThumbWidth}" Height="{Binding ThumbHeight}"
                     CornerRadius="3" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -461,18 +464,29 @@
             </Border>
           </Grid>
 
-          <StackPanel Grid.Column="1" Margin="14,0,0,0">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="{Binding Friendly}" FontWeight="SemiBold" FontSize="14"
+          <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+            <!-- A Grid, not a horizontal StackPanel: a StackPanel hands every
+                 child its full desired width, so the name never trimmed, it
+                 simply overflowed and took the badge off the edge of the card.
+                 Auto for the badge and star for the name puts the squeeze where
+                 the ellipsis can absorb it. -->
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="{Binding Friendly}"
+                         FontWeight="SemiBold" FontSize="14"
                          Foreground="{DynamicResource TextBrush}"
                          TextTrimming="CharacterEllipsis"/>
-              <Border Background="{DynamicResource AccentBrush}" CornerRadius="3"
-                      Padding="7,2" Margin="10,0,0,0"
+              <Border Grid.Column="1" Background="{DynamicResource AccentBrush}"
+                      CornerRadius="3" Padding="7,2" Margin="10,0,0,0"
+                      VerticalAlignment="Center"
                       Visibility="{Binding BadgeVisibility}">
                 <TextBlock Text="{DynamicResource S_PrimaryBadge}" FontSize="11"
                            Foreground="{DynamicResource OnAccentBrush}"/>
               </Border>
-            </StackPanel>
+            </Grid>
 
             <TextBlock Text="{Binding ResolutionText}" Style="{StaticResource Subtle}"
                        Margin="0,2,0,0"/>
@@ -490,12 +504,12 @@
                        Foreground="{DynamicResource AccentBrush}" FontSize="12"
                        TextWrapping="Wrap"
                        Visibility="{Binding ProblemVisibility}"/>
+          </StackPanel>
 
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-              <Button Tag="pick" Content="{Binding PickLabel}"/>
-              <Button Tag="auto" Content="{DynamicResource S_AutoLabel}" Margin="8,0,0,0"
-                      Visibility="{Binding AutoVisibility}"/>
-            </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Tag="pick" Content="{Binding PickLabel}"/>
+            <Button Tag="auto" Content="{DynamicResource S_AutoLabel}" Margin="8,0,0,0"
+                    Visibility="{Binding AutoVisibility}"/>
           </StackPanel>
         </Grid>
       </Border>
