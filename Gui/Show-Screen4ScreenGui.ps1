@@ -165,7 +165,7 @@ $script:Languages = @('fr', 'en', 'de', 'it')
 $script:SettingsPath = Join-Path (Split-Path (Get-WallpaperLogPath) -Parent) 'gui-settings.json'
 
 function Get-DefaultRoot {
-    # The folder shipped with the repository, holding the three sample
+    # The folder shipped with the repository, holding the four sample
     # backgrounds, so a fresh clone opens on something real instead of an
     # empty folder. Same default as the CLI wrapper's -WallpaperRoot.
     $shipped = Join-Path (Split-Path $PSScriptRoot -Parent) 'wallpapers'

@@ -39,7 +39,7 @@
 
 .PARAMETER WallpaperRoot
     Folder holding the images. Defaults to the 'wallpapers' folder next to
-    this script, which ships with three samples, so a fresh clone works with
+    this script, which ships with four samples, so a fresh clone works with
     no argument at all. The window opens on the same folder.
 
 .PARAMETER Position

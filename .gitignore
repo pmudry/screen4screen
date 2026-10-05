@@ -1,9 +1,10 @@
-# The default image folder. Only the three ISC sample backgrounds are
+# The default image folder. Only the four ISC sample backgrounds are
 # tracked; anything you drop in here stays yours.
 wallpapers/*
 !wallpapers/README.md
 !wallpapers/5120x2160.webp
 !wallpapers/ratio-16x9.webp
+!wallpapers/ratio-8x5.webp
 !wallpapers/default.webp
 
 # Per-user manual monitor assignments, written next to the images

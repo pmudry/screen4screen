@@ -24,7 +24,7 @@ The window speaks French, English, German and Italian, and follows Windows for b
 
 ## Image naming
 
-Put your images in one folder (by default the `wallpapers` folder next to the script, which ships with three samples). For a given monitor the script tries, in order. Note that for each name a **folder is tried before a file**:
+Put your images in one folder (by default the `wallpapers` folder next to the script, which ships with four samples, one per kind of screen). For a given monitor the script tries, in order. Note that for each name a **folder is tried before a file**:
 
 | Priority | Name                    | Meaning                                      |
 |----------|-------------------------|----------------------------------------------|
