@@ -196,7 +196,11 @@ function Import-GuiSetting {
 
     if (Test-Path -LiteralPath $script:SettingsPath -PathType Leaf) {
         try {
-            $d = Get-Content -LiteralPath $script:SettingsPath -Raw | ConvertFrom-Json
+            # UTF-8 explicitly, for the same reason as wallpapers.json: written
+            # without a BOM, and 5.1's Get-Content would read an accented
+            # folder path in the ANSI code page and reopen on a mangled one.
+            $d = [System.IO.File]::ReadAllText($script:SettingsPath, [System.Text.Encoding]::UTF8) |
+                 ConvertFrom-Json
             $names = $d.PSObject.Properties.Name
             if ($names -contains 'root'     -and $d.root)     { $root     = $d.root }
             if ($names -contains 'position' -and $d.position) { $position = $d.position }

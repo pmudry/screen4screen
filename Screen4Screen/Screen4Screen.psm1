@@ -665,7 +665,14 @@ function Get-AssignmentRecord {
     }
 
     try {
-        $raw  = Get-Content -LiteralPath $path -Raw
+        # Read as UTF-8 explicitly. The file is written without a BOM, and
+        # Get-Content on Windows PowerShell 5.1 -- the host the scheduled task
+        # runs -- reads a BOM-less file in the ANSI code page, so an accented
+        # folder name such as "arriere-plans" with a grave accent came back as
+        # mojibake, Test-Path failed, and the pinned image was silently
+        # replaced by the fallback. ReadAllText still honours a BOM if a hand
+        # edit added one.
+        $raw  = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
         $data = $raw | ConvertFrom-Json
     }
     catch {
